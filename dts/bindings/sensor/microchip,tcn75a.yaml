@@ -1,0 +1,17 @@
+# Copyright 2022 Daniel DeGrasse <daniel@degrasse.com>
+# SPDX-License-Identifier: Apache-2.0
+
+description: TCN75A ambient temperature sensor
+
+compatible: "microchip,tcn75a"
+
+include: i2c-device.yaml
+
+properties:
+  alert-gpios:
+    type: phandle-array
+    description: |
+      ALERT pin
+      This pin defaults to active low when produced by the sensor.
+      The property value should ensure the gpio flags properly describe
+      the signal that is presented to the driver.
