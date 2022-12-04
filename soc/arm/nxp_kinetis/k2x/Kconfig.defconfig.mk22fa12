@@ -1,0 +1,14 @@
+# Copyright 2022 Daniel DeGrasse
+# SPDX-License-Identifier: Apache-2.0
+
+# Kinetis MK22FA12 configuration options
+
+if SOC_MK22F12
+
+config SOC
+	default "mk22f12"
+
+config NUM_IRQS
+	default 81
+
+endif # SOC_MK22F12
