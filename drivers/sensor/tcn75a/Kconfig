@@ -1,0 +1,96 @@
+# Copyright 2022 Daniel DeGrasse <daniel@degrasse.com>
+# SPDX-License-Identifier: Apache-2.0
+
+config TCN75A
+	bool "TCN75A Ambient Temperature Sensor"
+	default y
+	depends on DT_HAS_MICROCHIP_TCN75A_ENABLED
+	select I2C
+	help
+	  Enable TCN75A ambient temperature to digital converter
+
+if TCN75A
+
+choice TCN75A_RESOLUTION
+	prompt "TCN75A temperature resolution"
+	default TCN75A_RESOLUTION_9BIT
+
+# Note: datasheet's claim about the ambient temperature register:
+# > When the 0.5°C, 0.25°C or 0.125°C resolutions are selected,
+# > bit 6, bit 7 or bit 8 will remain clear <0>,
+# > respectively.
+# appears to be incorrect. Only conversion times seem to be affected by
+# resolution selection.
+
+config TCN75A_RESOLUTION_9BIT
+	bool "9 bit resolution: 0.5C, 30ms conversion time"
+
+config TCN75A_RESOLUTION_10BIT
+	bool "10 bit resolution: 0.25C, 60ms conversion time"
+
+config TCN75A_RESOLUTION_11BIT
+	bool "11 bit resolution: 0.125C, 120ms conversion time"
+
+config TCN75A_RESOLUTION_12BIT
+	bool "12 bit resolution: 0.0625C, 240ms conversion time"
+
+endchoice
+
+choice TCN75A_OP_MODE
+	prompt "TCN75A operation mode"
+	default TCN75A_OP_MODE_CONTINUOUS
+
+config TCN75A_OP_MODE_ONESHOT
+	depends on TCN75A_RESOLUTION_9BIT
+	bool "Oneshot sample mode"
+	help
+	  One shot sample mode. Offers lower power consumption than continuous
+	  sampling, as sensor transitions to shutdown after taking a sample.
+	  Does not support high resolution modes.
+
+config TCN75A_OP_MODE_CONTINUOUS
+	bool "Continuous sample mode"
+	help
+	  Read samples continuously. Required to use TCN75A trigger support
+
+endchoice
+
+choice
+	prompt "TCN75A Trigger mode"
+	default TCN75A_TRIGGER_NONE
+
+config TCN75A_TRIGGER_NONE
+	bool "No trigger"
+
+config TCN75A_TRIGGER_OWN_THREAD
+	bool "Use own thread"
+	select TCN75A_TRIGGER
+
+config TCN75A_TRIGGER_GLOBAL_THREAD
+	bool "Use global thread"
+	select TCN75A_TRIGGER
+
+endchoice
+
+config TCN75A_TRIGGER
+	bool
+	depends on TCN75A_OP_MODE_CONTINUOUS
+	help
+	  Enable interrupt based trigger support for TCN75A
+
+if TCN75A_TRIGGER_OWN_THREAD
+
+config TCN75A_THREAD_PRIORITY
+	int "Own thread priority"
+	depends on TCN75A_TRIGGER_OWN_THREAD
+	default 10
+
+config TCN75A_THREAD_STACK_SIZE
+	int "Own thread stack size"
+	depends on TCN75A_TRIGGER_OWN_THREAD
+	default 1024
+
+endif # TCN75A_TRIGGER_OWN_THREAD
+
+
+endif # TCN75A
