@@ -1,0 +1,14 @@
+sample:
+  name: TCN75A Ambient temperature sensor
+tests:
+  sample.sensor.tcn75a:
+    tags: sensors
+    harness: console
+    depends_on: i2c
+    harness_config:
+      type: multi_line
+      ordered: true
+      regex:
+        - "Current temperature is ([0-9\\.]+)"
+      fixture: fixture_i2c_tcn75a
+    filter: dt_compat_enabled("microchip,tcn75a")
