@@ -11,4 +11,7 @@ config SOC
 config NUM_IRQS
 	default 81
 
+config CPU_HAS_CUSTOM_FIXED_SOC_MPU_REGIONS
+	default y
+
 endif # SOC_MK22F12
