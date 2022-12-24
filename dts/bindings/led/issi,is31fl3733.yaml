@@ -1,0 +1,50 @@
+# Copyright 2022 Daniel DeGrasse <daniel@degrasse.com>
+# SPDX-License-Identifier: Apache-2.0
+description: ISSI IS31FL3733 LED Matrix Driver
+
+compatible: "issi,is31fl3733"
+
+include: ["i2c-device.yaml", "led-controller.yaml"]
+
+
+properties:
+    sdb-gpios:
+      type: phandle-array
+      required: false
+      description: |
+        Hardware shutdown pin. If routed on the board, this property must be
+        present. Set to a logical 1 at boot to exit the device from hardware
+        shutdown.
+    current-limit:
+      type: int
+      required: false
+      default: 0xFF
+      description: |
+        Global current limit. Sets the global current control register of LED
+        driver (set table 14). Limits global current based on the following
+        formula: (840/R_ISET) * (current-limit/256). Defaults to max value
+        of 0xFF, so led output will still be enabled if property is
+        not provided.
+    default-brightness:
+      type: int
+      required: false
+      default: 0xFF
+      description: |
+        This property allows the user to set LED brightness at boot, so
+        that when an LED is enabled by the user it will have a preset
+        brightness. If this setting is set to 0, LEDs will need to have
+        a defined brightness set via the led_set_brightness API before
+        they will illuminate. Defaults to maximum brightness of 0xFF.
+    sync-mode:
+      type: string
+      required: false
+      default: "high-z"
+      enum:
+        - "high-z"
+        - "master"
+        - "slave"
+      description: |
+        This property configures the LED controller as a master or slave
+        clock device. This can be used to synchronize the output of multiple
+        LED controllers. See SYNC bits in led configuration register for more
+        information.
