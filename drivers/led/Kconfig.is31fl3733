@@ -8,9 +8,19 @@ config IS31FL3733
 	select I2C
 	help
 	  Enable LED driver for IS31FL3733.
-
 	  IS31FL3733 is a matrix LED driver, capable of a maximum of 3.29 mA
 	  per LED, or 42 mA total across all LEDs in the 12x16 dot matrix.
 
-	  Note: this driver is configured to operate the LED array in dot
-	  matrix mode, as shown in figure 1 of the datasheet
+if IS31FL3733
+
+config IS31FL3733_BLINK_API
+	bool "Enable led_blink API for IS31FL3733 driver"
+	default y
+	depends on !MINIMAL_LIBC
+	help
+	  Enable led_blink API for IS31FL3733 driver. Since the IS1FL3733 uses
+	  discrete time options for auto breathe mode, this API requires use
+	  of log2() and other LIBC functions to calculate the best possible
+	  configuration for a given delay period requested via the API.
+
+endif # IS31FL3733

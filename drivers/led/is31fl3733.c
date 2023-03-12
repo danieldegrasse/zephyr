@@ -75,6 +75,7 @@ LOG_MODULE_REGISTER(is31fl3733);
 /* Constant used in led breathe mode calculations */
 #define LOG2_3_2 0.584962501f
 
+#ifdef CONFIG_IS31FL3733_BLINK_API
 /* Multipliers for led breathe mode calculations
  * These multipliers are derived from the time registers T1-T4.
  * See Tables 15 and 16 in datasheet. All values are given in
@@ -87,6 +88,8 @@ static uint32_t is31fl3733_pfs_time_scale[] = {
 	840,
 	168,
 };
+
+#endif /* CONFIG_IS31FL3733_BLINK_API */
 
 struct is31fl3733_config {
 	struct i2c_dt_spec bus;
@@ -140,85 +143,56 @@ static int is31fl3733_select_page(const struct device *dev, uint8_t page)
 	return ret;
 }
 
-/* Helper function to find best possible auto breathe mode setting
- * for requested ramp up, ramp down, on, and off times
- * returns cumulative error of best solution found.
- *
- * Sets t1_b, t2_b, t3_b, t4_b, and pfs_b to best values for
- * T1,T2,T3,T4, and PFS registers.
- */
-static int is31fl3733_abm_solution(uint32_t ramp_up, uint32_t ramp_down,
-	uint32_t delay_on, uint32_t delay_off, uint8_t *pfs_b, uint8_t *t1_b,
-	uint8_t *t2_b, uint8_t *t3_b, uint8_t *t4_b)
+/* Helper function to turn led on/off */
+static int is31fl3733_led_on_off(const struct device *dev, uint32_t led, bool on)
 {
-	uint32_t error, cand, t1_err, t2_err, t3_err, t4_err, pfs_base;
-	uint8_t t1, t2, t3, t4, pfs;
-	/* Since the IS31FL3733 only supports discrete on and off times,
-	 * we must search all possible settings of the PFS and time scale
-	 * registers to find the one best approximating the ramp up, ramp
-	 * down, time on, and time off values requested by the user.
-	 *
-	 * We will calculate the cumulative error of each PFS and timescale
-	 * value, and compare it to the current best setting we've located.
-	 * If the new solution wins, we'll keep it and continue searching
-	 * Note: this process is rather compute intensive. If you'd like
-	 * to reduce the impact, ensure the devicetree properties
-	 * abm-ramp-up, abm-ramp-down, and the arguments delay_on and delay_off
-	 * are exact values possible with the ABM control registers
-	 * (see Tables 15 and 16 of the datasheet). The algorithm will always
-	 * stop if it finds an exact solution for requested values.
+	const struct is31fl3733_config *config = dev->config;
+	struct is31fl3733_data *data = dev->data;
+	int ret;
+	uint8_t reg, mask;
+
+	reg = led / 8;
+	mask = BIT((led % 8));
+	/* Note: first byte of led state reg is reserved for address
+	 * data, used with burst writes
 	 */
-	error = UINT32_MAX;
-	for (pfs = 0; pfs <= CONF_REG_PFS_MAX; pfs++) {
-		pfs_base = is31fl3733_pfs_time_scale[pfs];
-		for (t1 = 0; t1 <= ABMX_CTRL1_T1_MAX; t1++) {
-			/* T1 error */
-			t1_err = abs(ramp_up - (pfs_base << t1));
-			for (t2 = 0; t2 <= ABMX_CTRL1_T2_MAX; t2++) {
-				/* T2 error */
-				if (t2 == 0) {
-					t2_err = delay_on;
-				} else {
-					t2_err = abs(delay_on - (pfs_base << (t2 - 1)));
-				}
-				for (t3 = 0; t3 <= ABMX_CTRL2_T3_MAX; t3++) {
-					/* T3 error */
-					t3_err = abs(ramp_down - (pfs_base << t3));
-					for (t4 = 0; t4 <= ABMX_CTRL2_T4_MAX; t4++) {
-						/* T4 error */
-						if (t4 == 0) {
-							t4_err = delay_off;
-							if (pfs == 2) {
-								/* Datasheet says this is
-								 * an invalid setting
-								 */
-								continue;
-							}
-						} else {
-							t4_err = abs(delay_off -
-								(pfs_base << (t4 - 1)));
-						}
-						cand = (t1_err + t2_err + t3_err + t4_err);
-						if (cand < error) {
-							/* New best solution found */
-							error = cand;
-							*t1_b = t1;
-							*t2_b = t2;
-							*t3_b = t3;
-							*t4_b = t4;
-							*pfs_b = pfs;
-							if (error == 0) {
-								return 0;
-							}
-						}
-					}
-				}
+	if (on) {
+		data->led_state[reg + 1] |= mask;
+	} else {
+		data->led_state[reg + 1] &= ~mask;
+	}
+	ret = is31fl3733_select_page(dev, CMD_SEL_LED);
+	if (ret < 0) {
+		return ret;
+	}
+	ret = i2c_reg_write_byte_dt(&config->bus, reg, data->led_state[reg + 1]);
+	if (on) {
+		/* Check PWM state. If not set, initialize LED to default
+		 * brightness
+		 */
+		if (data->pwm_state[led + 1] == 0) {
+			ret = is31fl3733_led_set_brightness(dev, led,
+				config->default_brightness);
+			if (ret < 0) {
+				return ret;
 			}
 		}
 	}
-	return error;
+	return ret;
 }
 
+static int is31fl3733_led_on(const struct device *dev, uint32_t led)
+{
+	return is31fl3733_led_on_off(dev, led, true);
+}
+
+static int is31fl3733_led_off(const struct device *dev, uint32_t led)
+{
+	return is31fl3733_led_on_off(dev, led, false);
+}
+
+
+#ifdef CONFIG_IS31FL3733_BLINK_API
 
 /*
  * Helper function to find best possible auto breathe mode setting
@@ -228,7 +202,7 @@ static int is31fl3733_abm_solution(uint32_t ramp_up, uint32_t ramp_down,
  * Sets t1_b, t2_b, t3_b, t4_b, and pfs_b to best values for
  * T1,T2,T3,T4, and PFS registers.
  */
-static int is31fl3733_abm_solution_2(uint32_t ramp_up, uint32_t ramp_down,
+static int is31fl3733_abm_solution(uint32_t ramp_up, uint32_t ramp_down,
 	uint32_t delay_on, uint32_t delay_off, uint8_t *pfs_b, uint8_t *t1_b,
 	uint8_t *t2_b, uint8_t *t3_b, uint8_t *t4_b)
 {
@@ -337,55 +311,6 @@ static int is31fl3733_abm_solution_2(uint32_t ramp_up, uint32_t ramp_down,
 	return err;
 }
 
-
-/* Helper function to turn led on/off */
-static int is31fl3733_led_on_off(const struct device *dev, uint32_t led, bool on)
-{
-	const struct is31fl3733_config *config = dev->config;
-	struct is31fl3733_data *data = dev->data;
-	int ret;
-	uint8_t reg, mask;
-
-	reg = led / 8;
-	mask = BIT((led % 8));
-	/* Note: first byte of led state reg is reserved for address
-	 * data, used with burst writes
-	 */
-	if (on) {
-		data->led_state[reg + 1] |= mask;
-	} else {
-		data->led_state[reg + 1] &= ~mask;
-	}
-	ret = is31fl3733_select_page(dev, CMD_SEL_LED);
-	if (ret < 0) {
-		return ret;
-	}
-	ret = i2c_reg_write_byte_dt(&config->bus, reg, data->led_state[reg + 1]);
-	if (on) {
-		/* Check PWM state. If not set, initialize LED to default
-		 * brightness
-		 */
-		if (data->pwm_state[led + 1] == 0) {
-			ret = is31fl3733_led_set_brightness(dev, led,
-				config->default_brightness);
-			if (ret < 0) {
-				return ret;
-			}
-		}
-	}
-	return ret;
-}
-
-static int is31fl3733_led_on(const struct device *dev, uint32_t led)
-{
-	return is31fl3733_led_on_off(dev, led, true);
-}
-
-static int is31fl3733_led_off(const struct device *dev, uint32_t led)
-{
-	return is31fl3733_led_on_off(dev, led, false);
-}
-
 static int is31fl3733_led_blink(const struct device *dev, uint32_t led,
 	uint32_t delay_on, uint32_t delay_off)
 {
@@ -402,28 +327,14 @@ static int is31fl3733_led_blink(const struct device *dev, uint32_t led,
 		}
 	}
 
-	uint64_t delta = k_uptime_get();
 	ret = is31fl3733_abm_solution(config->abm_ramp_up,
 				config->abm_ramp_down,
 				delay_on, delay_off,
 				&pfs, &t1, &t2, &t3, &t4);
-	LOG_DBG("ABM solution 1 took %llu ms\n", k_uptime_delta(&delta));
 	LOG_DBG("Found solution for R_UP %d, R_DOWN %d, T_ON %d T_OFF %d",
 		config->abm_ramp_up, config->abm_ramp_down, delay_on, delay_off);
 	LOG_DBG("T1: %d T2: %d T3: %d T4: %d PFS: %d", t1, t2, t3, t4, pfs);
 	LOG_DBG("Error: %d", ret);
-
-	delta = k_uptime_get();
-	ret = is31fl3733_abm_solution_2(config->abm_ramp_up,
-				config->abm_ramp_down,
-				delay_on, delay_off,
-				&pfs, &t1, &t2, &t3, &t4);
-	LOG_DBG("ABM solution 2 took %llu ms\n", k_uptime_delta(&delta));
-	LOG_DBG("Found solution for R_UP %d, R_DOWN %d, T_ON %d T_OFF %d",
-		config->abm_ramp_up, config->abm_ramp_down, delay_on, delay_off);
-	LOG_DBG("T1: %d T2: %d T3: %d T4: %d PFS: %d", t1, t2, t3, t4, pfs);
-	LOG_DBG("Error: %d", ret);
-
 
 	/* Since Zephyr's LED API has no definition for switching modes,
 	 * auto breathe mode 1 is used for the LED blink function. Other
@@ -489,6 +400,8 @@ static int is31fl3733_led_blink(const struct device *dev, uint32_t led,
 	 */
 	return i2c_reg_write_byte_dt(&config->bus, TIME_UPDATE_REG, 0x0);
 }
+
+#endif /* IS31FL3733_BLINK_API */
 
 
 static int is31fl3733_led_set_brightness(const struct device *dev, uint32_t led, uint8_t value)
@@ -677,7 +590,9 @@ static const struct led_driver_api is31fl3733_api = {
 	.off = is31fl3733_led_off,
 	.set_brightness = is31fl3733_led_set_brightness,
 	.write_channels = is31fl3733_led_write_channels,
+#ifdef CONFIG_IS31FL3733_BLINK_API
 	.blink = is31fl3733_led_blink,
+#endif
 };
 
 #define IS31FL3733_DEVICE(n)                                                                       \
