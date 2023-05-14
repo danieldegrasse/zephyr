@@ -21,6 +21,8 @@ manifest:
   remotes:
     - name: upstream
       url-base: https://github.com/zephyrproject-rtos
+    - name: danieldegrasse
+      url-base: git@github.com:danieldegrasse
 
   #
   # Please add items below based on alphabetical order
@@ -93,7 +95,8 @@ manifest:
       groups:
         - hal
     - name: hal_nxp
-      revision: d957472002a3758154f402e982d95ce90cf58e12
+      revision: 4c992b5db0ea6960f910199dd50310d0f7a766c7
+      remote: danieldegrasse
       path: modules/hal/nxp
       groups:
         - hal
