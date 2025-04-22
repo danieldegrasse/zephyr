@@ -27,6 +27,7 @@ struct flash_mspi_nor_quirks {
 	int (*post_switch_mode)(const struct device *dev);
 };
 
+/* Flash data. Stored in ROM unless CONFIG_FLASH_MSPI_NOR_RUNTIME_PROBE is enabled */
 struct flash_mspi_device_data {
 	const struct flash_mspi_nor_cmds *jedec_cmds;
 	const struct flash_mspi_nor_quirks *quirks;
@@ -52,16 +53,25 @@ struct flash_mspi_nor_config {
 	uint32_t reset_pulse_us;
 	uint32_t reset_recovery_us;
 #endif
+#if !defined(CONFIG_FLASH_MSPI_NOR_RUNTIME_PROBE)
 	struct flash_mspi_device_data flash_data;
+#endif
 };
 
+#if defined(CONFIG_FLASH_MSPI_NOR_RUNTIME_PROBE)
+#define FLASH_DATA(dev) (((struct flash_mspi_nor_data *)(dev->data))->flash_data)
+#else
 #define FLASH_DATA(dev) (((const struct flash_mspi_nor_config *)(dev->config))->flash_data)
+#endif
 
 struct flash_mspi_nor_data {
 	struct k_sem acquired;
 	struct mspi_xfer_packet packet;
 	struct mspi_xfer xfer;
 	struct mspi_dev_cfg *curr_cfg;
+#if defined(CONFIG_FLASH_MSPI_NOR_RUNTIME_PROBE)
+	struct flash_mspi_device_data flash_data;
+#endif
 };
 
 struct flash_mspi_nor_cmd {

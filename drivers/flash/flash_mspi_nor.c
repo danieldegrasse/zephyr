@@ -702,6 +702,38 @@ static int flash_chip_init(const struct device *dev)
 		}
 	}
 
+#if defined(CONFIG_FLASH_MSPI_NOR_RUNTIME_PROBE)
+	int i;
+
+	for (i = 0; i < mspi_nor_devs_count; i++) {
+		if (memcmp(id, &mspi_nor_devs[i].jedec_id,
+			 sizeof(id)) == 0) {
+			FLASH_DATA(dev).jedec_cmds = &mspi_nor_devs[i].jedec_cmds;
+			FLASH_DATA(dev).quirks = &mspi_nor_devs[i].quirks;
+			FLASH_DATA(dev).dw15_qer = mspi_nor_devs[i].dw15_qer;
+			FLASH_DATA(dev).dev_cfg.io_mode = mspi_nor_devs[i].dev_cfg.io_mode;
+			FLASH_DATA(dev).dev_cfg.data_rate = mspi_nor_devs[i].dev_cfg.data_rate;
+			FLASH_DATA(dev).dev_cfg.endian = mspi_nor_devs[i].dev_cfg.endian;
+			FLASH_DATA(dev).dev_cfg.dqs_enable = mspi_nor_devs[i].dev_cfg.dqs_enable;
+			FLASH_DATA(dev).flash_size = mspi_nor_devs[i].flash_size;
+			FLASH_DATA(dev).layout.pages_count = mspi_nor_devs[i].flash_size /
+				mspi_nor_devs[i].page_size;
+			FLASH_DATA(dev).layout.pages_size = mspi_nor_devs[i].page_size;
+			memcpy(&FLASH_DATA(dev).jedec_id,
+			       &mspi_nor_devs[i].jedec_id,
+			       sizeof(FLASH_DATA(dev).jedec_id));
+			LOG_DBG("Found device: %02x %02x %02x",
+			 id[0], id[1], id[2]);
+			break;
+		}
+	}
+	if (i == mspi_nor_devs_count) {
+		LOG_ERR("Device not found: %02x %02x %02x",
+			id[0], id[1], id[2]);
+		return -ENODEV;
+	}
+#else
+	/* Validate JEDEC ID */
 	if (memcmp(id, FLASH_DATA(dev).jedec_id, sizeof(id)) != 0) {
 		LOG_ERR("JEDEC ID mismatch, read: %02x %02x %02x, "
 			"expected: %02x %02x %02x",
@@ -711,6 +743,7 @@ static int flash_chip_init(const struct device *dev)
 			FLASH_DATA(dev).jedec_id[2]);
 		return -ENODEV;
 	}
+#endif
 
 #if defined(CONFIG_MSPI_XIP)
 	/* Enable XIP access for this chip if specified so in DT. */
@@ -787,7 +820,7 @@ static DEVICE_API(flash, drv_api) = {
 	.dqs_enable = false,						\
 }
 
-#define FLASH_SIZE_INST(inst) (DT_INST_PROP(inst, size) / 8)
+#define FLASH_SIZE_INST(inst) (DT_INST_PROP_OR(inst, size, 0) / 8)
 
 /* Define copies of mspi_io_mode enum values, so they can be used inside
  * the COND_CODE_1 macros.
@@ -873,7 +906,6 @@ BUILD_ASSERT((FLASH_SIZE_INST(inst) % CONFIG_FLASH_MSPI_NOR_LAYOUT_PAGE_SIZE) ==
 		      MSPI_IO_MODE_OCTAL),					\
 		"Only 1x, 1-4-4 and 8x I/O modes are supported for now");	\
 	PM_DEVICE_DT_INST_DEFINE(inst, dev_pm_action_cb);			\
-	static struct flash_mspi_nor_data dev##inst##_data;			\
 	static const struct flash_mspi_nor_config dev##inst##_config = {	\
 		.bus = DEVICE_DT_GET(DT_INST_BUS(inst)),			\
 		.mspi_id = MSPI_DEVICE_ID_DT_INST(inst),			\
@@ -890,7 +922,12 @@ BUILD_ASSERT((FLASH_SIZE_INST(inst) % CONFIG_FLASH_MSPI_NOR_LAYOUT_PAGE_SIZE) ==
 				/ 1000,						\
 		.reset_recovery_us = DT_INST_PROP_OR(inst, t_reset_recovery, 0)	\
 				   / 1000,))					\
-		(FLASH_DATA_INIT(inst)) 					\
+	COND_CODE_1(CONFIG_FLASH_MSPI_NOR_RUNTIME_PROBE, (),			\
+		(FLASH_DATA_INIT(inst)))					\
+	};									\
+	static struct flash_mspi_nor_data dev##inst##_data = {			\
+	COND_CODE_1(CONFIG_FLASH_MSPI_NOR_RUNTIME_PROBE,			\
+		(FLASH_DATA_INIT(inst)), ())					\
 	};									\
 	FLASH_PAGE_LAYOUT_CHECK(inst)						\
 	DEVICE_DT_INST_DEFINE(inst,						\
