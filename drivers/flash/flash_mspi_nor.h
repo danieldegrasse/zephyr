@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2025 Nordic Semiconductor ASA
+ * Copyright (c) 2025 Tenstorrent AI ULC
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -20,11 +21,27 @@ extern "C" {
 #define WITH_RESET_GPIO 1
 #endif
 
+/* Flash chip specific quirks */
+struct flash_mspi_nor_quirks {
+	/* Called after switching to default IO mode. */
+	int (*post_switch_mode)(const struct device *dev);
+};
+
+struct flash_mspi_device_data {
+	const struct flash_mspi_nor_cmds *jedec_cmds;
+	const struct flash_mspi_nor_quirks *quirks;
+	struct mspi_dev_cfg dev_cfg;
+	uint8_t jedec_id[SPI_NOR_MAX_ID_LEN];
+	uint8_t dw15_qer;
+	uint32_t flash_size;
+#if defined(CONFIG_FLASH_PAGE_LAYOUT)
+	struct flash_pages_layout layout;
+#endif
+};
+
 struct flash_mspi_nor_config {
 	const struct device *bus;
-	uint32_t flash_size;
 	struct mspi_dev_id mspi_id;
-	struct mspi_dev_cfg mspi_nor_cfg;
 	struct mspi_dev_cfg mspi_nor_init_cfg;
 	enum mspi_dev_cfg_mask mspi_nor_cfg_mask;
 #if defined(CONFIG_MSPI_XIP)
@@ -35,14 +52,10 @@ struct flash_mspi_nor_config {
 	uint32_t reset_pulse_us;
 	uint32_t reset_recovery_us;
 #endif
-#if defined(CONFIG_FLASH_PAGE_LAYOUT)
-	struct flash_pages_layout layout;
-#endif
-	uint8_t jedec_id[SPI_NOR_MAX_ID_LEN];
-	const struct flash_mspi_nor_cmds *jedec_cmds;
-	struct flash_mspi_nor_quirks *quirks;
-	uint8_t dw15_qer;
+	struct flash_mspi_device_data flash_data;
 };
+
+#define FLASH_DATA(dev) (((const struct flash_mspi_nor_config *)(dev->config))->flash_data)
 
 struct flash_mspi_nor_data {
 	struct k_sem acquired;
