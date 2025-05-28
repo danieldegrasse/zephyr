@@ -25,40 +25,35 @@ static int emul_clock_mux_get_rate(const struct clk *clk_hw)
 static int emul_clock_mux_configure(const struct clk *clk_hw, const void *mux)
 {
 	struct emul_clock_mux *data = clk_hw->hw_data;
-	int curr_rate = clock_get_rate(clk_hw);
-	int new_rate;
-	int ret;
 	uint32_t mux_val = (uint32_t)(uintptr_t)mux;
 
 	if (mux_val > data->src_count) {
 		return -EINVAL;
 	}
 
-	new_rate = clock_get_rate(data->parents[mux_val]);
-
-	ret = clock_children_check_rate(clk_hw, new_rate);
-	if (ret < 0) {
-		return ret;
-	}
-
-	ret = clock_children_notify_pre_change(clk_hw, curr_rate, new_rate);
-	if (ret < 0) {
-		return ret;
-	}
-
 	/* Apply source selection */
 	data->src_sel = mux_val;
 
-	ret = clock_children_notify_post_change(clk_hw, curr_rate, new_rate);
-	if (ret < 0) {
-		return ret;
-	}
 	return 0;
 }
 
 #if defined(CONFIG_CLOCK_MANAGEMENT_RUNTIME)
-static int emul_clock_mux_notify(const struct clk *clk_hw, const struct clk *parent,
-				 const struct clock_management_event *event)
+static int emul_clock_mux_configure_recalc(const struct clk *clk_hw,
+					   const void *mux)
+{
+	struct emul_clock_mux *data = clk_hw->hw_data;
+	uint32_t mux_val = (uint32_t)(uintptr_t)mux;
+
+	if (mux_val > data->src_count) {
+		return -EINVAL;
+	}
+
+	return clock_get_rate(data->parents[mux_val]);
+}
+
+static int emul_clock_mux_recalc_rate(const struct clk *clk_hw,
+				      const struct clk *parent_clk,
+				      uint32_t parent_rate)
 {
 	struct emul_clock_mux *data = clk_hw->hw_data;
 
@@ -67,7 +62,7 @@ static int emul_clock_mux_notify(const struct clk *clk_hw, const struct clk *par
 	 * children
 	 */
 	if (data->parents[data->src_sel] == parent) {
-		return clock_notify_children(clk_hw, event);
+		return parent_rate;
 	}
 
 	/* Parent is not in use */
@@ -94,8 +89,7 @@ static int emul_clock_mux_round_rate(const struct clk *clk_hw,
 	 */
 	while ((idx < data->src_count) && (best_delta > 0)) {
 		cand_rate = clock_round_rate(data->parents[idx], req_rate);
-		if ((abs(cand_rate - target_rate) < best_delta) &&
-		    (clock_children_check_rate(clk_hw, cand_rate) == 0)) {
+		if (abs(cand_rate - target_rate) < best_delta) {
 			best_rate = cand_rate;
 			best_delta = abs(cand_rate - target_rate);
 		}
@@ -122,8 +116,7 @@ static int emul_clock_mux_set_rate(const struct clk *clk_hw,
 	 */
 	while ((idx < data->src_count) && (best_delta > 0)) {
 		cand_rate = clock_round_rate(data->parents[idx], req_rate);
-		if ((abs(cand_rate - target_rate) < best_delta) &&
-		    (clock_children_check_rate(clk_hw, cand_rate) == 0)) {
+		if (abs(cand_rate - target_rate) < best_delta) {
 			best_idx = idx;
 			best_delta = abs(cand_rate - target_rate);
 		}
@@ -136,19 +129,8 @@ static int emul_clock_mux_set_rate(const struct clk *clk_hw,
 		return best_rate;
 	}
 
-	curr_rate = clock_get_rate(clk_hw);
-
-	ret = clock_children_notify_pre_change(clk_hw, curr_rate, best_rate);
-	if (ret < 0) {
-		return ret;
-	}
 	/* Set new parent selector */
 	data->src_sel = best_idx;
-
-	ret = clock_children_notify_post_change(clk_hw, curr_rate, best_rate);
-	if (ret < 0) {
-		return ret;
-	}
 
 	return best_rate;
 }
@@ -159,6 +141,8 @@ const struct clock_management_driver_api emul_mux_api = {
 	.configure = emul_clock_mux_configure,
 #if defined(CONFIG_CLOCK_MANAGEMENT_RUNTIME)
 	.notify = emul_clock_mux_notify,
+	.configure_recalc = emul_clock_mux_configure_recalc,
+	.recalc_rate = emul_clock_mux_recalc_rate,
 #endif
 #if defined(CONFIG_CLOCK_MANAGEMENT_SET_RATE)
 	.round_rate = emul_clock_mux_round_rate,

@@ -143,6 +143,8 @@ static void clock_remove_constraint(const struct clk *clk_hw,
 #endif
 
 
+#ifdef CONFIG_CLOCK_MANAGEMET_RUNTIME
+
 /**
  * Helper function to notify clock of reconfiguration event
  *
@@ -162,6 +164,7 @@ static int clock_notify_children(const struct clk* clk_hw,
 	const clock_handle_t *handle = clk_hw->children;
 	const struct clock_output_data *data;
 	const struct clock_output *consumer;
+	struct clock_management_callback *cb;
 	int ret, child_rate;
 
 	if (*handle == CLOCK_LIST_END) {
@@ -179,9 +182,10 @@ static int clock_notify_children(const struct clk* clk_hw,
 			/* Notify consumers */
 			for (consumer = data->consumer_start;
 			     consumer < data->consumer_end; consumer++) {
-				if (consumer->cb->clock_callback) {
-					ret = consumer->cb->clock_callback(&event,
-								consumer->cb->user_data);
+				cb = consumer->cb;
+				if (cb->callback) {
+					ret = cb->callback(&event,
+							   cb->user_data);
 					if (ret) {
 						/* Consumer rejected new rate */
 						return ret;
@@ -195,7 +199,10 @@ static int clock_notify_children(const struct clk* clk_hw,
 			/* Recalculate rate of this child */
 			child_rate = clock_recalc_rate(clk_from_handle(*handle),
 						       clk_hw, new_freq);
-			if (child_rate < 0) {
+			if (child_rate == ENOTCONN) {
+				/* clock is not connected */
+				return CLK_NO_CHILDREN;
+			} else if (child_rate < 0) {
 				return child_rate;
 			}
 			/* Notify its children of new rate */
@@ -215,6 +222,15 @@ static int clock_notify_children(const struct clk* clk_hw,
 
 	return 0;
 }
+#else
+static int clock_notify_children(const struct clk* clk_hw,
+				 uint32_t new_freq,
+				 enum clock_management_event_type ev_type)
+{
+	/* This is no-op if runtime isn't enabled */
+	return 0;
+}
+#endif /* CONFIG_CLOCK_MANAGEMET_RUNTIME */
 
 
 /**
@@ -272,7 +288,7 @@ static int clock_apply_state(const struct clk *clk_hw,
 			     const struct clock_output_state *clk_state)
 {
 	const struct clock_output_data *data = clk_hw->hw_data;
-	int ret, new_rate;
+	int ret;
 
 	if (clk_state->num_clocks == 0) {
 		/* Use runtime clock setting */
@@ -282,8 +298,10 @@ static int clock_apply_state(const struct clk *clk_hw,
 			return -ENOTSUP;
 		}
 
-		ret = clock_set_rate(data->parent, clk_state->frequency);
-		if (ret != clk_state->frequency) {
+		ret = clock_tree_configure(cfg->clock, clk_state->frequency,
+					   clock_set_rate, clk_state->frequency);
+
+		if (ret < 0) {
 			return -ENOTSUP;
 		}
 
@@ -293,13 +311,12 @@ static int clock_apply_state(const struct clk *clk_hw,
 	/* Apply this clock state */
 	for (uint8_t i = 0; i < clk_state->num_clocks; i++) {
 		const struct clock_setting *cfg = &clk_state->clock_settings[i];
-		new_rate = clock_configure_recalc(cfg->clock,
-						  cfg->clock_config_data);
-		if (new_rate < 0) {
-			return new_rate;
+		ret = clock_configure_recalc(cfg->clock, cfg->clock_config_data);
+		if (ret < 0) {
+			return ret;
 		}
 
-		ret = clock_tree_configure(cfg->clock, new_rate,
+		ret = clock_tree_configure(cfg->clock, ret,
 					   clock_configure, cfg->clock_config_data);
 		if (ret < 0) {
 			/* Configure failed, exit */
@@ -330,7 +347,9 @@ int clock_management_get_rate(const struct clock_output *clk)
 	data = GET_CLK_CORE(clk)->hw_data;
 
 	/* Read rate */
-	return clock_get_rate(data->parent);
+	return COND_CODE_1(CONFIG_CLOCK_MANAGEMENT_RUNTIME,
+			   (data->parent->clock_rate),
+			   (clock_get_rate(data->parent)));
 }
 
 /**
@@ -457,7 +476,8 @@ out:
 	}
 #ifdef CONFIG_CLOCK_MANAGEMENT_SET_RATE
 	/* Apply the clock state */
-	ret = clock_set_rate(data->parent, combined_req->max_freq);
+	ret = clock_tree_configure(data->parent, combined_req->max_freq,
+				   clock_set_rate, combined_req->max_freq);
 	if (ret < 0) {
 		return ret;
 	}
@@ -665,43 +685,3 @@ const struct clock_management_output_api clock_output_api = {
 			     (struct clock_management_driver_api *)&clock_output_api);
 
 DT_INST_FOREACH_STATUS_OKAY(CLOCK_OUTPUT_DEFINE)
-
-#ifdef CONFIG_CLOCK_MANAGEMENT_RUNTIME
-/**
- * @brief Helper to issue a clock callback to all children nodes
- *
- * Helper function to issue a callback to all children of a given clock, with
- * a new clock rate. This function will call clock_notify on all children of
- * the given clock, with the provided rate as the parent rate
- *
- * @param clk_hw Clock object to issue callbacks for
- * @param event Clock reconfiguration event
- * @return 0 on success
- * @return CLK_NO_CHILDREN to indicate clock has no children actively using it,
- *         and may safely shut down.
- * @return -errno from @ref clock_notify on any other failure
- */
-int clock_notify_children(const struct clk *clk_hw,
-			  const struct clock_management_event *event)
-{
-	const clock_handle_t *handle = clk_hw->children;
-	int ret;
-	bool children_disconnected = true;
-
-	while (*handle != CLOCK_LIST_END) {
-		ret = clock_notify(clk_from_handle(*handle), clk_hw, event);
-		if (ret == 0) {
-			/* At least one child is using this clock */
-			children_disconnected = false;
-		} else if ((ret < 0) && (ret != -ENOTCONN)) {
-			/* ENOTCONN simply means MUX is disconnected.
-			 * other return codes should be propagated.
-			 */
-			return ret;
-		}
-		handle++;
-	}
-	return children_disconnected ? CLK_NO_CHILDREN : 0;
-}
-
-#endif /* CONFIG_CLOCK_MANAGEMENT_RUNTIME */

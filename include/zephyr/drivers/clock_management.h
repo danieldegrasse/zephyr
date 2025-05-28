@@ -90,7 +90,7 @@ typedef uint8_t clock_management_state_t;
  * or modify these fields.
  */
 struct clock_management_callback {
-	clock_management_callback_handler_t clock_callback;
+	clock_management_callback_handler_t callback;
 	const void *user_data;
 };
 
@@ -567,18 +567,11 @@ static inline int clock_management_set_callback(const struct clock_output *clk,
 static inline void clock_management_disable_unused(void)
 {
 #ifdef CONFIG_CLOCK_MANAGEMENT_RUNTIME
-	const struct clock_management_event event = {
-		.type = CLOCK_MANAGEMENT_QUERY_RATE_CHANGE,
-		.old_rate = 0,
-		.new_rate = 0,
-	};
-	STRUCT_SECTION_FOREACH_ALTERNATE(clk_root, clk, clk) {
-		/* Call clock_notify on each root clock. Clocks can use this
-		 * notification event to determine if they are able
-		 * to gate themselves
-		 */
-		clock_notify(clk, NULL, &event);
-	}
+#warning "Not implemented!"
+/*
+ * Todo- once we have clock on_off in place, we can call recalc_rate on all
+ * children, and if some report a clock as disconnected we can gate that clock
+ */
 #endif
 }
 

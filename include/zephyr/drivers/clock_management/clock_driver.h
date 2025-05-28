@@ -205,7 +205,7 @@ static inline int clock_recalc_rate(const struct clk *clk_hw,
 #if defined(CONFIG_CLOCK_MANAGEMENT_SET_RATE) || defined(__DOXYGEN__)
 
 /**
- * @brief Get nearest rate a clock can support given constraints
+ * @brief Get nearest rate a clock can support
  *
  * Returns the actual rate that this clock would produce if `clock_set_rate`
  * was called with the requested frequency.

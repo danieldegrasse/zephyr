@@ -29,6 +29,18 @@ static int emul_clock_div_get_rate(const struct clk *clk_hw)
 static int emul_clock_div_configure(const struct clk *clk_hw, const void *div_cfg)
 {
 	struct emul_clock_div *data = clk_hw->hw_data;
+	uint32_t div_val = (uint32_t)(uintptr_t)div_cfg;
+
+	/* Apply div selection */
+	data->div_val = div_val - 1;
+	return 0;
+}
+
+#if defined(CONFIG_CLOCK_MANAGEMENT_RUNTIME)
+static int emul_clock_div_configure_recalc(const struct clk *clk_hw,
+					   const void *div_cfg)
+{
+	struct emul_clock_div *data = clk_hw->hw_data;
 	int ret, parent_rate;
 	uint32_t div_val = (uint32_t)(uintptr_t)div_cfg;
 
@@ -41,38 +53,18 @@ static int emul_clock_div_configure(const struct clk *clk_hw, const void *div_cf
 		return parent_rate;
 	}
 
-	ret = clock_children_check_rate(clk_hw, parent_rate / div_val);
-	if (ret < 0) {
-		return ret;
-	}
-
-	ret = clock_children_notify_pre_change(clk_hw,
-					       parent_rate / (data->div_val + 1),
-					       parent_rate / div_val);
-	if (ret < 0) {
-		return ret;
-	}
-
-	/* Apply div selection */
-	data->div_val = div_val - 1;
-
-	return clock_children_notify_post_change(clk_hw,
-						 parent_rate / (data->div_val + 1),
-						 parent_rate / div_val);
+	return parent_rate / div_val;
 }
 
-#if defined(CONFIG_CLOCK_MANAGEMENT_RUNTIME)
-static int emul_clock_div_notify(const struct clk *clk_hw, const struct clk *parent,
-				 const struct clock_management_event *event)
+static int emul_clock_div_recalc_rate(const struct clk *clk_hw,
+				      const struct clk *parent_clk,
+				      uint32_t parent_rate)
 {
 	struct emul_clock_div *data = clk_hw->hw_data;
-	struct clock_management_event notify_event;
 
-	notify_event.type = event->type;
-	notify_event.old_rate = event->old_rate / (data->div_val + 1);
-	notify_event.new_rate = event->new_rate / (data->div_val + 1);
+	ARG_UNUSED(parent_clk);
 
-	return clock_notify_children(clk_hw, &notify_event);
+	return (parent_rate / (data->div_val + 1));
 }
 #endif
 
@@ -95,11 +87,6 @@ static int emul_clock_div_round_rate(const struct clk *clk_hw,
 
 	if (output_rate > req_rate) {
 		return -ENOENT;
-	}
-
-	ret = clock_children_check_rate(clk_hw, output_rate);
-	if (ret < 0) {
-		return ret;
 	}
 
 	return output_rate;
@@ -125,17 +112,7 @@ static int emul_clock_div_set_rate(const struct clk *clk_hw,
 		return -ENOENT;
 	}
 
-	ret = clock_children_notify_pre_change(clk_hw, current_rate, output_rate);
-	if (ret < 0) {
-		return ret;
-	}
-
 	data->div_val = div_val - 1;
-
-	ret = clock_children_notify_post_change(clk_hw, current_rate, output_rate);
-	if (ret < 0) {
-		return ret;
-	}
 
 	return output_rate;
 }
@@ -145,7 +122,8 @@ const struct clock_management_driver_api emul_div_api = {
 	.get_rate = emul_clock_div_get_rate,
 	.configure = emul_clock_div_configure,
 #if defined(CONFIG_CLOCK_MANAGEMENT_RUNTIME)
-	.notify = emul_clock_div_notify,
+	.configure_recalc = emul_clock_div_configure_recalc,
+	.recalc_rate = emul_clock_div_recalc_rate,
 #endif
 #if defined(CONFIG_CLOCK_MANAGEMENT_SET_RATE)
 	.round_rate = emul_clock_div_round_rate,
