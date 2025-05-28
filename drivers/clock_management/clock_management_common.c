@@ -24,6 +24,10 @@ LOG_MODULE_REGISTER(clock_management, CONFIG_CLOCK_MANAGEMENT_LOG_LEVEL);
 #define GET_CLK_CORE(clk) ((const struct clk *)clk)
 #endif
 
+/* Function prototype for applying clock setting */
+typedef int (*clock_apply_fn)(const struct clk *apply_clk,
+			      const void *apply_param);
+
 /*
  * Describes a clock setting. This structure records the
  * clock to configure, as well as the clock-specific configuration
@@ -138,6 +142,124 @@ static void clock_remove_constraint(const struct clk *clk_hw,
 
 #endif
 
+
+/**
+ * Helper function to notify clock of reconfiguration event
+ *
+ * @param clk_hw Clock which will have rate reconfigured
+ * @param new_freq New frequency that clock will configure to
+ * @return 0 if notification chain succeeded, or error if not
+ */
+static int clock_notify_children(const struct clk* clk_hw,
+				 uint32_t new_freq,
+				 enum clock_management_event_type ev_type)
+{
+	const struct clock_management_event event = {
+		.type = ev_type,
+		.old_rate = clk_hw->clock_rate,
+		.new_rate = new_freq
+	};
+	const clock_handle_t *handle = clk_hw->children;
+	const struct clock_output_data *data;
+	const struct clock_output *consumer;
+	int ret, child_rate;
+
+	if (*handle == CLOCK_LIST_END) {
+		/* Base case- clock leaf (output node) */
+		data = clk_hw->hw_data;
+		/* Check if the new rate is permitted given constraints */
+		if ((data->combined_req->min_freq > event->new_rate) ||
+		    (data->combined_req->max_freq < event->new_rate)) {
+			IF_ENABLED(CONFIG_CLOCK_MANAGEMENT_CLK_NAME,
+				   (LOG_DBG("Clock %s rejected frequency %d",
+				    clk_hw->clk_name, event->new_rate)));
+			return -ENOTSUP;
+		}
+		if (ev_type != CLOCK_MANAGEMENT_QUERY_RATE_CHANGE) {
+			/* Notify consumers */
+			for (consumer = data->consumer_start;
+			     consumer < data->consumer_end; consumer++) {
+				if (consumer->cb->clock_callback) {
+					ret = consumer->cb->clock_callback(&event,
+								consumer->cb->user_data);
+					if (ret) {
+						/* Consumer rejected new rate */
+						return ret;
+					}
+				}
+			}
+		}
+	} else {
+		/* Recursive case- clock with children */
+		while (*handle != CLOCK_LIST_END) {
+			/* Recalculate rate of this child */
+			child_rate = clock_recalc_rate(clk_from_handle(*handle),
+						       clk_hw, new_freq);
+			if (child_rate < 0) {
+				return child_rate;
+			}
+			/* Notify its children of new rate */
+			ret = clock_notify_children(clk_from_handle(*handle),
+						    child_rate,
+						    ev_type);
+			if (ret < 0) {
+				return ret;
+			}
+		}
+	}
+
+	if (ev_type == CLOCK_MANAGEMENT_POST_RATE_CHANGE) {
+		/* Record new rate for clock */
+		clk_hw->clock_rate = new_freq;
+	}
+
+	return 0;
+}
+
+
+/**
+ * Helper function to handle reconfiguration process for clock
+ *
+ * @param clk_hw Clock which will have rate reconfigured
+ * @param new_freq New frequency that clock will configure to
+ * @param apply_fn Function to call to apply new setting
+ * @param apply_param Configuration parameter to pass into apply_fn
+ * @return 0 if change was applied successfully, or error if not
+ */
+static int clock_tree_configure(const struct clk* clk_hw,
+				uint32_t new_freq,
+				clock_apply_fn apply_fn,
+				void *apply_param)
+{
+	int ret;
+	/* Validate children can accept rate */
+	ret = clock_notify_children(clk_hw, new_freq,
+				    CLOCK_MANAGEMENT_QUERY_RATE_CHANGE);
+	if (ret < 0) {
+		return ret;
+	}
+	/* Now, notify children rates will change */
+	ret = clock_notify_children(clk_hw, new_freq,
+				    CLOCK_MANAGEMENT_PRE_RATE_CHANGE);
+	if (ret < 0) {
+		return ret;
+	}
+	/* Apply the new rate */
+	ret = apply_fn(clk_hw, apply_param);
+	if (ret < 0) {
+		return ret;
+	}
+	/* Now, notify children rates have changed */
+	ret = clock_notify_children(clk_hw, new_freq,
+				    CLOCK_MANAGEMENT_POST_RATE_CHANGE);
+	if (ret < 0) {
+		return ret;
+	}
+
+	return 0;
+}
+
+
 /**
  * Helper function to apply a clock state
  *
@@ -150,7 +272,7 @@ static int clock_apply_state(const struct clk *clk_hw,
 			     const struct clock_output_state *clk_state)
 {
 	const struct clock_output_data *data = clk_hw->hw_data;
-	int ret;
+	int ret, new_rate;
 
 	if (clk_state->num_clocks == 0) {
 		/* Use runtime clock setting */
@@ -171,8 +293,14 @@ static int clock_apply_state(const struct clk *clk_hw,
 	/* Apply this clock state */
 	for (uint8_t i = 0; i < clk_state->num_clocks; i++) {
 		const struct clock_setting *cfg = &clk_state->clock_settings[i];
+		new_rate = clock_configure_recalc(cfg->clock,
+						  cfg->clock_config_data);
+		if (new_rate < 0) {
+			return new_rate;
+		}
 
-		ret = clock_configure(cfg->clock, cfg->clock_config_data);
+		ret = clock_tree_configure(cfg->clock, new_rate,
+					   clock_configure, cfg->clock_config_data);
 		if (ret < 0) {
 			/* Configure failed, exit */
 			return ret;

@@ -26,6 +26,45 @@ extern "C" {
 #endif
 
 /**
+ * @brief Clock management event types
+ *
+ * Types of events the clock management framework can generate for consumers.
+ */
+enum clock_management_event_type {
+	/**
+	 * Clock is about to change from frequency given by
+	 * `old_rate` to `new_rate`
+	 */
+	CLOCK_MANAGEMENT_PRE_RATE_CHANGE,
+	/**
+	 * Clock has just changed from frequency given by
+	 * `old_rate` to `new_rate`
+	 */
+	CLOCK_MANAGEMENT_POST_RATE_CHANGE,
+	/**
+	 * Used internally by the clock framework to check if
+	 * a clock can accept a frequency given by `new_rate`
+	 */
+	CLOCK_MANAGEMENT_QUERY_RATE_CHANGE
+};
+
+/**
+ * @brief Clock notification event structure
+ *
+ * Notification of clock rate change event. Consumers may examine this
+ * structure to determine what rate a clock will change to, as
+ * well as to determine if a clock is about to change rate or has already
+ */
+struct clock_management_event {
+	/** Type of event */
+	enum clock_management_event_type type;
+	/** Old clock rate */
+	uint32_t old_rate;
+	/** New clock rate */
+	uint32_t new_rate;
+};
+
+/**
  * @typedef clock_management_callback_handler_t
  * @brief Define the application clock callback handler function signature
  *

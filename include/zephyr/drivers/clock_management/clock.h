@@ -63,6 +63,8 @@ struct clk {
 #if defined(CONFIG_CLOCK_MANAGEMENT_RUNTIME) || defined(__DOXYGEN__)
 	/** Children nodes of the clock */
 	const clock_handle_t *children;
+	/** Cached clock rate */
+	uint32_t clock_rate;
 #endif
 #if defined(CONFIG_CLOCK_MANAGEMENT_CLK_NAME) || defined(__DOXYGEN__)
 	/** Name of this clock */

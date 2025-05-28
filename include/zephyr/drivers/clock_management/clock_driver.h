@@ -1,5 +1,6 @@
 /*
  * Copyright 2024 NXP
+ * Copyright 2025 Tenstorrent AI ULC
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -31,180 +32,23 @@ extern "C" {
  */
 
 /**
- * @brief Clock management event types
- *
- * Types of events the clock management framework can generate for consumers.
- */
-enum clock_management_event_type {
-	/**
-	 * Clock is about to change from frequency given by
-	 * `old_rate` to `new_rate`
-	 */
-	CLOCK_MANAGEMENT_PRE_RATE_CHANGE,
-	/**
-	 * Clock has just changed from frequency given by
-	 * `old_rate` to `new_rate`
-	 */
-	CLOCK_MANAGEMENT_POST_RATE_CHANGE,
-	/**
-	 * Used internally by the clock framework to check if
-	 * a clock can accept a frequency given by `new_rate`
-	 */
-	CLOCK_MANAGEMENT_QUERY_RATE_CHANGE
-};
-
-/**
- * @brief Clock notification event structure
- *
- * Notification of clock rate change event. Consumers may examine this
- * structure to determine what rate a clock will change to, as
- * well as to determine if a clock is about to change rate or has already
- */
-struct clock_management_event {
-	/** Type of event */
-	enum clock_management_event_type type;
-	/** Old clock rate */
-	uint32_t old_rate;
-	/** New clock rate */
-	uint32_t new_rate;
-};
-
-/**
- * @brief Return code to indicate clock has no children actively using its
- * output
- */
-#define CLK_NO_CHILDREN (1)
-
-
-#if defined(CONFIG_CLOCK_MANAGEMENT_RUNTIME) || defined(__DOXYGEN__)
-/**
- * @brief Helper to issue a clock callback to all children nodes
- *
- * Helper function to issue a callback to all children of a given clock, using
- * the provided notification event. This function will call clock_notify on
- * all children of the given clock.
- *
- * @param clk_hw Clock object to issue callbacks for
- * @param event Clock reconfiguration event
- * @return 0 on success
- * @return CLK_NO_CHILDREN to indicate clock has no children actively using it,
- *         and may safely shut down.
- * @return -errno from @ref clock_notify on any other failure
- */
-int clock_notify_children(const struct clk *clk_hw,
-			  const struct clock_management_event *event);
-#endif
-
-/**
- * @brief Helper to query children nodes if they can support a rate
- *
- * Helper function to send a notification event to all children nodes via
- * clock_notify, which queries the nodes to determine if they can accept
- * a given rate.
- *
- * @param clk_hw Clock object to issue callbacks for
- * @param rate Rate to query children with
- * @return 0 on success, indicating children can accept rate
- * @return CLK_NO_CHILDREN to indicate clock has no children actively using it,
- *         and may safely shut down.
- * @return -errno from @ref clock_notify on any other failure
- */
-static inline int clock_children_check_rate(const struct clk *clk_hw,
-					    uint32_t rate)
-{
-#ifdef CONFIG_CLOCK_MANAGEMENT_RUNTIME
-	const struct clock_management_event event = {
-		.type = CLOCK_MANAGEMENT_QUERY_RATE_CHANGE,
-		.old_rate = rate,
-		.new_rate = rate,
-	};
-	return clock_notify_children(clk_hw, &event);
-#else
-	return 0;
-#endif
-}
-
-/**
- * @brief Helper to notify children nodes a new rate is about to be applied
- *
- * Helper function to send a notification event to all children nodes via
- * clock_notify, which informs the children nodes a new rate is about to
- * be applied.
- *
- * @param clk_hw Clock object to issue callbacks for
- * @param old_rate Current rate of clock
- * @param new_rate Rate clock will change to
- * @return 0 on success, indicating children can accept rate
- * @return CLK_NO_CHILDREN to indicate clock has no children actively using it,
- *         and may safely shut down.
- * @return -errno from @ref clock_notify on any other failure
- */
-static inline int clock_children_notify_pre_change(const struct clk *clk_hw,
-						   uint32_t old_rate,
-						   uint32_t new_rate)
-{
-#ifdef CONFIG_CLOCK_MANAGEMENT_RUNTIME
-	const struct clock_management_event event = {
-		.type = CLOCK_MANAGEMENT_PRE_RATE_CHANGE,
-		.old_rate = old_rate,
-		.new_rate = new_rate,
-	};
-	return clock_notify_children(clk_hw, &event);
-#else
-	return 0;
-#endif
-}
-
-/**
- * @brief Helper to notify children nodes a new rate has been applied
- *
- * Helper function to send a notification event to all children nodes via
- * clock_notify, which informs the children nodes a new rate has been applied
- *
- * @param clk_hw Clock object to issue callbacks for
- * @param old_rate Old rate of clock
- * @param new_rate Rate clock has changed to
- * @return 0 on success, indicating children accept rate
- * @return CLK_NO_CHILDREN to indicate clock has no children actively using it,
- *         and may safely shut down.
- * @return -errno from @ref clock_notify on any other failure
- */
-static inline int clock_children_notify_post_change(const struct clk *clk_hw,
-						    uint32_t old_rate,
-						    uint32_t new_rate)
-{
-#ifdef CONFIG_CLOCK_MANAGEMENT_RUNTIME
-	const struct clock_management_event event = {
-		.type = CLOCK_MANAGEMENT_POST_RATE_CHANGE,
-		.old_rate = old_rate,
-		.new_rate = new_rate,
-	};
-	return clock_notify_children(clk_hw, &event);
-#else
-	return 0;
-#endif
-}
-
-/**
  * @brief Clock Driver API
  *
  * Clock driver API function prototypes. A pointer to a structure of this
  * type should be passed to "CLOCK_DT_DEFINE" when defining the @ref clk
  */
 struct clock_management_driver_api {
-	/**
-	 * Notify a clock that a parent has been reconfigured.
-	 * Note that this MUST remain the first field in the API structure
-	 * to support clock management callbacks
-	 */
-#if defined(CONFIG_CLOCK_MANAGEMENT_RUNTIME) || defined(__DOXYGEN__)
-	int (*notify)(const struct clk *clk_hw, const struct clk *parent,
-		      const struct clock_management_event *event);
-#endif
 	/** Gets clock rate in Hz */
 	int (*get_rate)(const struct clk *clk_hw);
 	/** Configure a clock with device specific data */
 	int (*configure)(const struct clk *clk_hw, const void *data);
+#if defined(CONFIG_CLOCK_MANAGEMENT_RUNTIME) || defined(__DOXYGEN__)
+	/** Recalculate a clock rate given device specific configuration data */
+	int (*configure_recalc)(const struct clk *clk_hw, const void *data);
+	/** Recalculate a clock rate given a parent's new clock rate */
+	int (*recalc_rate)(const struct clk *clk_hw,
+			   const struct clk *parent_clk, uint32_t parent_rate);
+#endif
 #if defined(CONFIG_CLOCK_MANAGEMENT_SET_RATE) || defined(__DOXYGEN__)
 	/** Gets nearest rate clock can support given rate request */
 	int (*round_rate)(const struct clk *clk_hw, uint32_t rate_req);
@@ -214,53 +58,10 @@ struct clock_management_driver_api {
 };
 
 /**
- * @brief Notify clock of reconfiguration
- *
- * Notifies a clock that a reconfiguration event has occurred. Parent clocks
- * should use @ref clock_notify_children to send notifications to all child
- * clocks, and should not use this API directly. Clocks may return an error
- * to reject a rate change.
- *
- * This API may also be called by the clock management subsystem directly to
- * notify the clock node that it should attempt to power itself down if is not
- * used.
- *
- * Clocks should forward this notification to their children clocks with
- * @ref clock_notify_children, and if the return code of that call is
- * ``CLK_NO_CHILDREN`` the clock may safely power itself down.
- * @param clk_hw Clock object to notify of reconfiguration
- * @param parent Parent clock device that was reconfigured
- * @param event Clock reconfiguration event
- * @return -ENOSYS if clock does not implement notify_children API
- * @return -ENOTSUP if clock child cannot support new rate
- * @return -ENOTCONN to indicate that clock is not using this parent. This can
- *         be useful to multiplexers to indicate to parents that they may safely
- *         shutdown
- * @return negative errno for other error notifying clock
- * @return 0 on success
- */
-static inline int clock_notify(const struct clk *clk_hw,
-			       const struct clk *parent,
-			       const struct clock_management_event *event)
-{
-#ifdef CONFIG_CLOCK_MANAGEMENT_RUNTIME
-	if (!(clk_hw->api) || !(clk_hw->api->notify)) {
-		return -ENOSYS;
-	}
-
-	return clk_hw->api->notify(clk_hw, parent, event);
-#else
-	return -ENOTSUP;
-#endif
-}
-
-/**
  * @brief Configure a clock
  *
- * Configure a clock device using hardware specific data. This must also
- * trigger a reconfiguration notification for any consumers of the clock.
- * Called by the clock management subsystem, not intended to be used directly
- * by clock drivers
+ * Configure a clock device using hardware specific data. Called by the clock
+ * management subsystem, not intended to be used directly by clock drivers
  * @param clk_hw clock device to configure
  * @param data hardware specific clock configuration data
  * @return -ENOSYS if clock does not implement configure API
@@ -276,7 +77,6 @@ static inline int clock_configure(const struct clk *clk_hw, const void *data)
 	if (!(clk_hw->api) || !(clk_hw->api->configure)) {
 		return -ENOSYS;
 	}
-
 	ret = clk_hw->api->configure(clk_hw, data);
 #ifdef CONFIG_CLOCK_MANAGEMENT_CLK_NAME
 	TOOLCHAIN_DISABLE_WARNING(TOOLCHAIN_WARNING_SHADOW);
@@ -316,14 +116,99 @@ static inline int clock_get_rate(const struct clk *clk_hw)
 	return ret;
 }
 
+#if defined(CONFIG_CLOCK_MANAGEMENT_RUNTIME) || defined(__DOXYGEN__)
+/**
+ * @brief Recalculate a clock frequency prior to configuration
+ *
+ * Calculate the new frequency a clock device would generate prior to
+ * applying a hardware specific configuration blob. The clock should not
+ * apply the setting when this function is called, simply calculate what
+ * the new frequency would be. Called by the clock management subsystem, not
+ * intended for use directly within drivers.
+ * @param clk_hw clock device to query
+ * @param data hardware specific clock configuration data
+ * @return -ENOSYS if clock does not implement configure API
+ * @return -EIO if clock cannot be configured with this data
+ * @return -EBUSY if clock cannot be modified at this time
+ * @return -ENOTSUP if API is not supported
+ * @return negative errno for other error configuring clock
+ * @return frequency in Hz that would be realized by applying this configuration
+ */
+static inline int clock_configure_recalc(const struct clk *clk_hw, const void *data)
+{
+	int ret;
+
+	if (!(clk_hw->api) || !(clk_hw->api->configure_recalc)) {
+		return -ENOSYS;
+	}
+	ret = clk_hw->api->configure_recalc(clk_hw, data);
+#ifdef CONFIG_CLOCK_MANAGEMENT_CLK_NAME
+	TOOLCHAIN_IGNORE_WSHADOW_BEGIN;
+	LOG_MODULE_DECLARE(clock_management, CONFIG_CLOCK_MANAGEMENT_LOG_LEVEL);
+	TOOLCHAIN_IGNORE_WSHADOW_END;
+	LOG_DBG("Clock %s would produce frequency %d after configuration",
+		clk_hw->clk_name, ret);
+#endif
+	return ret;
+}
+
+/**
+ * @brief Recalculate a clock frequency given a new parent frequency
+ *
+ * Calculate the frequency that a clock would generate if its parent were
+ * reconfigured to the frequency @p parent_rate. This call does not indicate
+ * that the clock has been reconfigured, and is simply a query.Called by the
+ * clock management subsystem, not intended for use directly within drivers.
+ * @param clk_hw clock to recalculate rate for
+ * @param parent_clk parent clock object whose rate would be changed
+ * @param parent_rate new frequency parent would update to
+ * @return -ENOSYS if API is not supported by this clock
+ * @return -ENOTSUP if API is not supported
+ * @return CLK_NOT_CONNECTED if clock is not attached to the parent clock
+ * @return rate clock would produce on success
+ */
+static inline int clock_recalc_rate(const struct clk *clk_hw,
+				    const struct clk *parent_clk,
+				    uint32_t parent_rate)
+{
+	int ret;
+
+	if (!(clk_hw->api) || !(clk_hw->api->recalc_rate)) {
+		return -ENOSYS;
+	}
+	ret = clk_hw->api->recalc_rate(clk_hw, parent_clk, parent_rate);
+#ifdef CONFIG_CLOCK_MANAGEMENT_CLK_NAME
+	TOOLCHAIN_IGNORE_WSHADOW_BEGIN;
+	LOG_MODULE_DECLARE(clock_management, CONFIG_CLOCK_MANAGEMENT_LOG_LEVEL);
+	TOOLCHAIN_IGNORE_WSHADOW_END;
+	LOG_DBG("Clock %s would produce frequency %d from parent %s, rate %d",
+		clk_hw->clk_name, ret, parent_clk->clk_name, parent_rate);
+#endif
+	return ret;
+}
+#else
+/* Stub functions to indicate recalc and recalc_rate aren't supported */
+
+static inline int clock_configure_recalc(const struct clk *clk_hw, const void *data)
+{
+	return -ENOTSUP;
+}
+
+static inline int clock_recalc_rate(const struct clk *clk_hw,
+				    const struct clk *parent_clk,
+				    uint32_t parent_rate)
+{
+	return -ENOTSUP;
+}
+#endif
+
 #if defined(CONFIG_CLOCK_MANAGEMENT_SET_RATE) || defined(__DOXYGEN__)
 
 /**
  * @brief Get nearest rate a clock can support given constraints
  *
  * Returns the actual rate that this clock would produce if `clock_set_rate`
- * was called with the requested constraints. Clocks should return the highest
- * frequency possible within the requested parameters.
+ * was called with the requested frequency.
  * @param clk_hw clock device to query
  * @param rate_req requested rate
  * @return -ENOTSUP if API is not supported
@@ -356,9 +241,7 @@ static inline int clock_round_rate(const struct clk *clk_hw, uint32_t rate_req)
 /**
  * @brief Set a clock rate
  *
- * Sets a clock to the best frequency given the parameters provided in @p req.
- * Clocks should set the highest frequency possible within the requested
- * parameters.
+ * Sets a clock to the closest frequency possible given the requested rate.
  * @param clk_hw clock device to set rate for
  * @param rate_req requested rate
  * @return -ENOTSUP if API is not supported
