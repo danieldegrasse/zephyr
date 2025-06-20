@@ -11,13 +11,12 @@
 struct emul_clock_div {
 	uint8_t div_max;
 	uint8_t div_val;
-	const struct clk *parent;
 };
 
 static int emul_clock_div_get_rate(const struct clk *clk_hw)
 {
 	struct emul_clock_div *data = clk_hw->hw_data;
-	int parent_rate = clock_get_rate(data->parent);
+	int parent_rate = clock_get_rate(clk_hw->parents[0]);
 
 	if (parent_rate <= 0) {
 		return parent_rate;
@@ -48,7 +47,7 @@ static int emul_clock_div_configure_recalc(const struct clk *clk_hw,
 		return -EINVAL;
 	}
 
-	parent_rate = clock_get_rate(data->parent);
+	parent_rate = clock_get_rate(clk_hw->parents[0]);
 	if (parent_rate <= 0) {
 		return parent_rate;
 	}
@@ -74,7 +73,7 @@ static int emul_clock_div_round_rate(const struct clk *clk_hw,
 
 {
 	struct emul_clock_div *data = clk_hw->hw_data;
-	int parent_rate = clock_round_rate(data->parent, req_rate);
+	int parent_rate = clock_round_rate(clk_hw->parents[0], req_rate);
 	int div_val = CLAMP((parent_rate / req_rate), 1, (data->div_max + 1));
 	uint32_t output_rate = parent_rate / div_val;
 	int ret;
@@ -96,7 +95,7 @@ static int emul_clock_div_set_rate(const struct clk *clk_hw,
 				   uint32_t req_rate)
 {
 	struct emul_clock_div *data = clk_hw->hw_data;
-	int parent_rate = clock_set_rate(data->parent, req_rate);
+	int parent_rate = clock_set_rate(clk_hw->parents[0], req_rate);
 	int div_val = CLAMP((parent_rate / req_rate), 1, (data->div_max + 1));
 	uint32_t output_rate = parent_rate / div_val;
 	uint32_t current_rate = parent_rate / (data->div_val + 1);
@@ -132,14 +131,17 @@ const struct clock_management_driver_api emul_div_api = {
 };
 
 #define EMUL_CLOCK_DEFINE(inst)                                                \
+	const struct clk *const emul_clock_div_parents_##inst[] = {            \
+		CLOCK_DT_GET(DT_INST_PARENT(inst)), NULL,                      \
+	};                                                                     \
+	                                                                       \
 	struct emul_clock_div emul_clock_div_##inst = {                        \
-		.parent = CLOCK_DT_GET(DT_INST_PARENT(inst)),                  \
 		.div_max = DT_INST_PROP(inst, max_div) - 1,                    \
 		.div_val = 0,                                                  \
 	};                                                                     \
 	                                                                       \
 	CLOCK_DT_INST_DEFINE(inst,                                             \
 			     &emul_clock_div_##inst,                           \
-			     &emul_div_api);
+			     &emul_div_api, emul_clock_div_parents_##inst);
 
 DT_INST_FOREACH_STATUS_OKAY(EMUL_CLOCK_DEFINE)

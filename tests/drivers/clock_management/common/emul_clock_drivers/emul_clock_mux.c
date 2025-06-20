@@ -12,14 +12,13 @@
 struct emul_clock_mux {
 	uint8_t src_count;
 	uint8_t src_sel;
-	const struct clk *parents[];
 };
 
 static int emul_clock_mux_get_rate(const struct clk *clk_hw)
 {
 	struct emul_clock_mux *data = clk_hw->hw_data;
 
-	return clock_get_rate(data->parents[data->src_sel]);
+	return clock_get_rate(clk_hw->parents[data->src_sel]);
 }
 
 static int emul_clock_mux_configure(const struct clk *clk_hw, const void *mux)
@@ -48,7 +47,7 @@ static int emul_clock_mux_configure_recalc(const struct clk *clk_hw,
 		return -EINVAL;
 	}
 
-	return clock_get_rate(data->parents[mux_val]);
+	return clock_get_rate(clk_hw->parents[mux_val]);
 }
 
 static int emul_clock_mux_recalc_rate(const struct clk *clk_hw,
@@ -61,7 +60,7 @@ static int emul_clock_mux_recalc_rate(const struct clk *clk_hw,
 	 * Read selector, and if index matches parent index we should notify
 	 * children
 	 */
-	if (data->parents[data->src_sel] == parent) {
+	if (clk_hw->parents[data->src_sel] == parent) {
 		return parent_rate;
 	}
 
@@ -88,7 +87,7 @@ static int emul_clock_mux_round_rate(const struct clk *clk_hw,
 	 * caller
 	 */
 	while ((idx < data->src_count) && (best_delta > 0)) {
-		cand_rate = clock_round_rate(data->parents[idx], req_rate);
+		cand_rate = clock_round_rate(clk_hw->parents[idx], req_rate);
 		if (abs(cand_rate - target_rate) < best_delta) {
 			best_rate = cand_rate;
 			best_delta = abs(cand_rate - target_rate);
@@ -115,7 +114,7 @@ static int emul_clock_mux_set_rate(const struct clk *clk_hw,
 	 * caller
 	 */
 	while ((idx < data->src_count) && (best_delta > 0)) {
-		cand_rate = clock_round_rate(data->parents[idx], req_rate);
+		cand_rate = clock_round_rate(clk_hw->parents[idx], req_rate);
 		if (abs(cand_rate - target_rate) < best_delta) {
 			best_idx = idx;
 			best_delta = abs(cand_rate - target_rate);
@@ -124,7 +123,7 @@ static int emul_clock_mux_set_rate(const struct clk *clk_hw,
 	}
 
 	/* Now set the clock rate for the best parent */
-	best_rate = clock_set_rate(data->parents[best_idx], req_rate);
+	best_rate = clock_set_rate(clk_hw->parents[best_idx], req_rate);
 	if (best_rate < 0) {
 		return best_rate;
 	}
@@ -154,17 +153,17 @@ const struct clock_management_driver_api emul_mux_api = {
 	CLOCK_DT_GET(DT_PHANDLE_BY_IDX(node_id, prop, idx)),
 
 #define EMUL_CLOCK_DEFINE(inst)                                                \
+	const struct clk *const emul_clock_mux_parents_##inst[] = {            \
+		DT_INST_FOREACH_PROP_ELEM(inst, inputs, GET_MUX_INPUT)         \
+		NULL,                                                          \
+	};                                                                     \
 	struct emul_clock_mux emul_clock_mux_##inst = {                        \
 		.src_count = DT_INST_PROP_LEN(inst, inputs),                   \
-		.parents = {                                                   \
-			DT_INST_FOREACH_PROP_ELEM(inst, inputs,                \
-						GET_MUX_INPUT)                 \
-		},                                                             \
 		.src_sel = 0,                                                  \
 	};                                                                     \
 	                                                                       \
 	CLOCK_DT_INST_DEFINE(inst,                                             \
 			     &emul_clock_mux_##inst,                           \
-			     &emul_mux_api);
+			     emul_mux_api, &emul_clock_mux_parents_##inst);
 
 DT_INST_FOREACH_STATUS_OKAY(EMUL_CLOCK_DEFINE)
