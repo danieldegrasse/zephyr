@@ -60,6 +60,8 @@ struct clk {
 	const struct clock_management_driver_api *api;
 	/** Pointer to private clock hardware data. May be in ROM or RAM. */
 	void *hw_data;
+	/** Parent clocks of this clock, NULL terminated */
+	const struct clk *const *parents;
 #if defined(CONFIG_CLOCK_MANAGEMENT_RUNTIME) || defined(__DOXYGEN__)
 	/** Children nodes of the clock */
 	const clock_handle_t *children;
@@ -135,12 +137,14 @@ struct clk {
  * @param children_ Children of this clock
  * @param hw_data Pointer to the clock's private data
  * @param api_ Pointer to the clock's API structure.
+ * @param parents_ List of parent clocks for this clock, NULL terminated
  */
-#define Z_CLOCK_INIT(children_, hw_data_, api_, name_)                         \
+#define Z_CLOCK_INIT(children_, hw_data_, api_, parents_, name_)               \
 	{                                                                      \
 		IF_ENABLED(CONFIG_CLOCK_MANAGEMENT_RUNTIME, (.children = children_,))\
 		IF_ENABLED(CONFIG_CLOCK_MANAGEMENT_CLK_NAME, (.clk_name = name_,))   \
 		.hw_data = (void *)hw_data_,                                   \
+		.parents = parents_,                                           \
 		.api = api_,                                                   \
 	}
 
@@ -178,13 +182,14 @@ struct clk {
  * @param config Pointer to the clock's private constant data, which will be
  * stored in the @ref clk.config field
  * @param api Pointer to the clock's API structure.
+ * @param parents List of parent clocks for this clock, NULL terminated.
  * @param secname Section name to place clock object into
  */
-#define Z_CLOCK_BASE_DEFINE(node_id, clk_id, hw_data, api, secname)            \
+#define Z_CLOCK_BASE_DEFINE(node_id, clk_id, hw_data, api, parents, secname)   \
 	Z_CLOCK_DEFINE_CHILDREN(node_id);                                      \
 	Z_CLOCK_STRUCT_DEF(secname) CLOCK_NAME_GET(clk_id) =                   \
 		Z_CLOCK_INIT(Z_CLOCK_GET_CHILDREN(node_id),                    \
-			     hw_data, api, DT_NODE_FULL_NAME(node_id));
+			     hw_data, api, parents, DT_NODE_FULL_NAME(node_id));
 
 /**
  * @brief Declare a clock for each used clock node in devicetree
@@ -336,11 +341,12 @@ static inline clock_handle_t clk_handle_get(const struct clk *clk_hw)
  * @param hw_data Pointer to the clock's private data, which will be
  * stored in the @ref clk.hw_data field. This data may be in ROM or RAM.
  * @param api Pointer to the clock's API structure.
+ * @param parents List of parent clocks for this clock, NULL terminated.
  */
 
-#define CLOCK_DT_DEFINE(node_id, hw_data, api, ...)                            \
+#define CLOCK_DT_DEFINE(node_id, hw_data, api, parents, ...)                            \
 	Z_CLOCK_BASE_DEFINE(node_id, Z_CLOCK_DT_CLK_ID(node_id), hw_data,      \
-			    api, Z_CLOCK_SECTION_NAME(node_id))
+			    api, parents, Z_CLOCK_SECTION_NAME(node_id))
 
 /**
  * @brief Like CLOCK_DT_DEFINE(), but uses an instance of `DT_DRV_COMPAT`
@@ -373,8 +379,10 @@ static inline clock_handle_t clk_handle_get(const struct clk *clk_hw)
  */
 
 #define ROOT_CLOCK_DT_DEFINE(node_id, hw_data, api, ...)                       \
+	const struct clk Z_CLOCK_DT_CLK_ID(node_id) ## parents[] = {NULL}      \
 	Z_CLOCK_BASE_DEFINE(node_id, Z_CLOCK_DT_CLK_ID(node_id), hw_data,      \
-			    api, Z_ROOT_CLOCK_SECTION_NAME(node_id))
+			    api, &Z_CLOCK_DT_CLK_ID(node_id) ## parents,       \
+			    Z_ROOT_CLOCK_SECTION_NAME(node_id))
 
 /**
  * @brief Like ROOT_CLOCK_DT_DEFINE(), but uses an instance of `DT_DRV_COMPAT`

@@ -768,7 +768,6 @@ def write_dep_info(node: edtlib.Node) -> None:
     out_dt_define(f"{node.z_path_id}_SUPPORTS_CLK_ORDS",
                   fmt_dep_list(clock_ords))
 
-
 def prop2value(prop: edtlib.Property) -> edtlib.PropertyValType:
     # Gets the macro value for property 'prop', if there is
     # a single well-defined C rvalue that it can be represented as.
