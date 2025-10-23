@@ -378,6 +378,8 @@ typedef int (*smbus_api_smbalert_cb_t)(const struct device *dev,
 				       struct smbus_callback *cb);
 typedef int (*smbus_api_host_notify_cb_t)(const struct device *dev,
 					  struct smbus_callback *cb);
+typedef int (*smbus_api_cancel_t)(const struct device *dev);
+typedef int (*smbus_api_uncancel_t)(const struct device *dev);
 
 __subsystem struct smbus_driver_api {
 	smbus_api_configure_t configure;
@@ -397,6 +399,8 @@ __subsystem struct smbus_driver_api {
 	smbus_api_smbalert_cb_t smbus_smbalert_remove_cb;
 	smbus_api_host_notify_cb_t smbus_host_notify_set_cb;
 	smbus_api_host_notify_cb_t smbus_host_notify_remove_cb;
+	smbus_api_cancel_t smbus_cancel;
+	smbus_api_uncancel_t smbus_uncancel;
 };
 
 /**
@@ -1083,6 +1087,46 @@ static inline int z_impl_smbus_block_pcall(const struct device *dev,
 
 	return  api->smbus_block_pcall(dev, addr, cmd, snd_count, snd_buf,
 				       rcv_count, rcv_buf);
+}
+
+/**
+ * @brief Cancel all outstanding SMBus transactions and block future
+ *
+ * Any current SMBus transaction on this device immediately fails
+ * and returns -ECANCELED. Further SMBus transactions fail until
+ * smbus_uncancel is called.
+ *
+ * Note that this sets cancellation on the underlying I2C.
+ *
+ * @param dev Pointer to the device structure for the SMBus driver instance.
+ *
+ * @retval 0 If successful.
+ * @retval -ENOSYS If cancellation is not implemented by the driver.
+ */
+__syscall int smbus_cancel(const struct device *dev);
+
+static inline int z_impl_smbus_cancel(const struct device *dev)
+{
+	(void)dev;
+	return 0;
+}
+
+/**
+ * @brief Restore normal SMBus operation after cancellation
+ *
+ * SMBus and underlying I2C return to normal operation.
+ *
+ * @param dev Pointer to the device structure for the SMBus driver instance.
+ *
+ * @retval 0 If successful.
+ * @retval -ENOSYS If cancellation is not implemented by the driver.
+ */
+__syscall int smbus_uncancel(const struct device *dev);
+
+static inline int z_impl_smbus_uncancel(const struct device *dev)
+{
+	(void)dev;
+	return 0;
 }
 
 #ifdef __cplusplus

@@ -617,6 +617,11 @@ __syscall int32_t k_usleep(int32_t us);
  */
 __syscall void k_busy_wait(uint32_t usec_to_wait);
 
+static inline void k_busy_wait_ns(uint32_t nsec_to_wait)
+{
+       k_busy_wait(k_cyc_to_us_ceil32(k_ns_to_cyc_floor32(nsec_to_wait)));
+}
+
 /**
  * @brief Check whether it is possible to yield in the current context.
  *

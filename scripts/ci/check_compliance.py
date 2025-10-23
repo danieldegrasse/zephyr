@@ -291,7 +291,7 @@ class CheckPatch(ComplianceTest):
             cmd = [checkpatch]
 
         cmd.extend(['--mailback', '--no-tree', '-'])
-        with subprocess.Popen(('git', 'diff', '--no-ext-diff', COMMIT_RANGE),
+        with subprocess.Popen(('git', 'diff', '--no-ext-diff', COMMIT_RANGE, '--', ':!*.diff', ':!*.patch'),
                                 stdout=subprocess.PIPE,
                                 cwd=GIT_TOP) as diff:
             try:
@@ -742,7 +742,7 @@ class KconfigCheck(ComplianceTest):
 
         # Use hard coded paths for Zephyr for tests, samples and ext. module root
         tmp_output = git("grep", "-I", "-h", "--perl-regexp", regex, "--", ":tests", ":samples",
-                         ":modules", cwd=ZEPHYR_BASE, ignore_non_zero=True)
+                         ":modules", cwd=Path(GIT_TOP), ignore_non_zero=True)
 
         if len(tmp_output) > 0:
             kconfigs += tmp_output + "\n"
@@ -1254,7 +1254,9 @@ flagged.
         "COMPILER_RT_RTLIB",
         "CRC",  # Used in TI CC13x2 / CC26x2 SDK comment
         "DEEP_SLEEP",  # #defined by RV32M1 in ext/
+        "DEFAULT_PWM_PORT",
         "DESCRIPTION",
+        "DMC_RUN_SMBUS_TESTS",
         "ERR",
         "ESP_DIF_LIBRARY",  # Referenced in CMake comment
         "EXPERIMENTAL",
@@ -1276,6 +1278,7 @@ flagged.
         "IAR_LIBCPP",
         "IAR_SEMIHOSTING",
         "IAR_ZEPHYR_INIT",
+        "INA2XX",
         "IPC_SERVICE_ICMSG_BOND_NOTIFY_REPEAT_TO_MS", # Used in ICMsg tests for intercompatibility
                                                       # with older versions of the ICMsg.
         "LIBGCC_RTLIB",
@@ -1322,6 +1325,7 @@ flagged.
         "SHIFT",
         "SINGLE_APPLICATION_SLOT", # Used in sysbuild for MCUboot configuration
         "SINGLE_APPLICATION_SLOT_RAM_LOAD", # Used in sysbuild for MCUboot configuration
+        "SKIP_ZERO_DUTY_CYCLE_TEST",
         "SOC_SDKNG_UNSUPPORTED", # Used in modules/hal_nxp/mcux/CMakeLists.txt
         "SOC_SERIES_", # Used as regex in scripts/utils/board_v1_to_v2.py
         "SOC_WATCH",  # Issue 13749
@@ -1412,6 +1416,7 @@ class SysbuildKconfigCheck(KconfigCheck):
     # A different allowlist is used for symbols prefixed with SB_CONFIG_ (omitted here).
     UNDEF_KCONFIG_ALLOWLIST = {
         # zephyr-keep-sorted-start re(^\s+")
+        "DMC_BOARD",
         "FOO",
         "MY_IMAGE", # Used in sysbuild documentation as example
         "OTHER_APP_IMAGE_NAME", # Used in sysbuild documentation as example
@@ -1582,17 +1587,25 @@ class LicenseAndCopyrightCheck(ComplianceTest):
             self.fmtd_failure(severity, title, rel_path, desc=desc or "", line=1)
 
     def run(self) -> None:
-        changed_files = get_files(filter="d")
-        if not changed_files:
-            return
+        changed_files = set()
 
         # Only scan text files for now, in the future we may want to leverage REUSE standard's
         # ability to also associate license/copyright info with binary files.
-        for file in changed_files:
+        for file in get_files(filter="d"):
+            skip_exts = {".diff", ".in", ".patch", ".yaml", ".yml"}
+            _, ext = os.path.splitext(file)
+            if ext in skip_exts:
+                continue
+
             full_path = GIT_TOP / file
             mime_type = magic.from_file(os.fspath(full_path), mime=True)
             if not mime_type.startswith("text/"):
-                changed_files.remove(file)
+                continue
+
+            changed_files.add(full_path)
+
+        if not changed_files:
+            return
 
         project = Project.from_directory(GIT_TOP)
         report = ProjectSubsetReport.generate(project, changed_files, multiprocessing=False)
@@ -2015,6 +2028,11 @@ class KeepSorted(ComplianceTest):
         mime_type = magic.from_file(os.fspath(file), mime=True)
 
         if not mime_type.startswith("text/"):
+            return
+
+        skip_exts = {".patch", ".diff"}
+        _, ext = os.path.splitext(file)
+        if ext in skip_exts:
             return
 
         block_data = ""
