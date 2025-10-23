@@ -778,25 +778,23 @@ static int stm32_i2c_irq_xfer(const struct device *dev, struct i2c_msg *msg,
 		 */
 		__ASSERT_NO_MSG(((isr & I2C_ISR_TC) != 0U) ||
 				((msg->flags & I2C_MSG_RESTART) != 0U));
-
-		if ((msg->flags & I2C_MSG_RW_MASK) == I2C_MSG_WRITE) {
-			cr2 &= ~I2C_CR2_RD_WRN;
-#ifndef CONFIG_I2C_STM32_V2_DMA
-			/* Prepare first byte in TX buffer before transfer start as a
-			 * workaround for errata: "Transmission stalled after first byte transfer"
-			 */
-			if (data->current.len > 0U) {
-				LL_I2C_TransmitData8(regs, *data->current.buf);
-				data->current.len--;
-				data->current.buf++;
-			}
-#endif
-
-		} else {
-			cr2 |= I2C_CR2_RD_WRN;
-		}
 		/* Issue (re)start condition */
 		cr2 |= I2C_CR2_START;
+	}
+	if ((msg->flags & I2C_MSG_RW_MASK) == I2C_MSG_WRITE) {
+		cr2 &= ~I2C_CR2_RD_WRN;
+#ifndef CONFIG_I2C_STM32_V2_DMA
+		/* Prepare first byte in TX buffer before transfer start as a
+		 * workaround for errata: "Transmission stalled after first byte transfer"
+		 */
+		if (data->current.len > 0U) {
+			LL_I2C_TransmitData8(regs, *data->current.buf);
+			data->current.len--;
+			data->current.buf++;
+		}
+#endif
+	} else {
+		cr2 |= I2C_CR2_RD_WRN;
 	}
 
 	/* Set common interrupt enable bits */
