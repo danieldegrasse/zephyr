@@ -146,6 +146,7 @@ static int i2c_stm32_transfer(const struct device *dev, struct i2c_msg *msg,
 {
 	struct i2c_stm32_data *data = dev->data;
 	struct i2c_msg *current;
+	struct i2c_msg active_msg;
 	struct i2c_msg *next = NULL;
 	int ret = 0;
 
@@ -208,7 +209,8 @@ static int i2c_stm32_transfer(const struct device *dev, struct i2c_msg *msg,
 			next = current + 1;
 			next_msg_flags = &(next->flags);
 		}
-		ret = i2c_stm32_transaction(dev, *current, next_msg_flags, slave);
+		memcpy(&active_msg, current, sizeof(struct i2c_msg));
+		ret = i2c_stm32_transaction(dev, active_msg, next_msg_flags, slave);
 		if (ret < 0) {
 			break;
 		}

@@ -9,6 +9,7 @@
 #ifndef ZEPHYR_DRIVERS_I2C_I2C_LL_STM32_H_
 #define ZEPHYR_DRIVERS_I2C_I2C_LL_STM32_H_
 
+#include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c/stm32.h>
 #include <zephyr/kernel.h>
 #include <zephyr/devicetree.h>
@@ -111,7 +112,7 @@ struct i2c_stm32_data {
 		unsigned int is_nack;
 		unsigned int is_err;
 		bool continue_in_next;
-		struct i2c_msg *msg;
+		uint8_t msg_flags;
 		unsigned int len;
 		uint8_t *buf;
 	} current;

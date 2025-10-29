@@ -566,7 +566,7 @@ void i2c_stm32_event(const struct device *dev)
 		 */
 
 		/* Send stop if flag set in message */
-		if ((data->current.msg->flags & I2C_MSG_STOP) != 0U) {
+		if ((data->current.msg_flags & I2C_MSG_STOP) != 0U) {
 			/* Setting STOP here will clear TC, expect I2C_ISR_STOPF next */
 			LL_I2C_GenerateStopCondition(regs);
 		} else {
@@ -728,7 +728,7 @@ static int stm32_i2c_irq_xfer(const struct device *dev, struct i2c_msg *msg,
 	data->current.is_arlo = 0U;
 	data->current.is_nack = 0U;
 	data->current.is_err = 0U;
-	data->current.msg = msg;
+	data->current.msg_flags = msg->flags;
 
 #if defined(CONFIG_I2C_TARGET)
 	data->master_active = true;
