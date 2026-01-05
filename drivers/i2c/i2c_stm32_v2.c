@@ -1390,6 +1390,11 @@ int i2c_stm32_transaction(const struct device *dev,
 {
 	int ret = 0;
 
+	struct i2c_stm32_data *data = dev->data;
+	if (data->cancelled) {
+		return -EIO;
+	}
+
 #ifdef CONFIG_I2C_STM32_INTERRUPT
 	ret = stm32_i2c_irq_xfer(dev, &msg, next_msg_flags, periph);
 #else
@@ -1405,7 +1410,7 @@ int i2c_stm32_transaction(const struct device *dev,
 	 * which will make the combination of all chunks to look like one big
 	 * transaction on the wire.
 	 */
-	struct i2c_stm32_data *data = dev->data;
+
 	const struct i2c_stm32_config *cfg = dev->config;
 	I2C_TypeDef *i2c = cfg->i2c;
 	const uint32_t i2c_stm32_maxchunk = 255U;
