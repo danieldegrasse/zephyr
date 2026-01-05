@@ -208,8 +208,7 @@ class HardwareAdapter(DeviceAdapter):
     def _close_serial_pty(self) -> None:
         """Terminate the process opened for serial pty script"""
         if self._serial_pty_proc:
-            self._serial_pty_proc.terminate()
-            self._serial_pty_proc.communicate(timeout=self.base_timeout)
+            terminate_process(self._serial_pty_proc)
             logger.debug('Process %s terminated', self.device_config.serial_pty)
             self._serial_pty_proc = None
 
