@@ -680,6 +680,11 @@ structure in the main Zephyr tree: boards/<vendor>/<board_name>/""")
              " risk. It is recommended to only use this option for local "
              " development and when testing localized change in a subsystem.")
 
+    parser.add_argument("--failure-script",
+                        help="""specify a failures script. This will be executed
+                        on test failure.
+                        """)
+
     parser.add_argument(
         '--detailed-test-id', action='store_true',
         help="Compose each test Suite name from its configuration path (relative to root) and "
