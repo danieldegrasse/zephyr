@@ -1107,8 +1107,14 @@ __syscall int smbus_cancel(const struct device *dev);
 
 static inline int z_impl_smbus_cancel(const struct device *dev)
 {
-	(void)dev;
-	return 0;
+	const struct smbus_driver_api *api =
+		(const struct smbus_driver_api *)dev->api;
+
+	if (api->smbus_cancel == NULL) {
+		return -ENOSYS;
+	}
+
+	return  api->smbus_cancel(dev);
 }
 
 /**
@@ -1125,9 +1131,16 @@ __syscall int smbus_uncancel(const struct device *dev);
 
 static inline int z_impl_smbus_uncancel(const struct device *dev)
 {
-	(void)dev;
-	return 0;
+	const struct smbus_driver_api *api =
+		(const struct smbus_driver_api *)dev->api;
+
+	if (api->smbus_uncancel == NULL) {
+		return -ENOSYS;
+	}
+
+	return  api->smbus_uncancel(dev);
 }
+
 
 #ifdef __cplusplus
 }
