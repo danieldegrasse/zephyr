@@ -215,7 +215,23 @@ int arch_irq_is_enabled(unsigned int irq)
 
 void z_irq_priority_set(unsigned int irq, unsigned int prio, uint32_t flags)
 {
-	ARG_UNUSED(flags);
+#ifdef CONFIG_MULTI_LEVEL_INTERRUPTS
+	unsigned int level = irq_get_level(irq);
+	const struct device *dev;
+
+#ifdef CONFIG_3RD_LEVEL_INTERRUPTS
+	if (level == 3) {
+		dev = z_get_sw_isr_device_from_irq(irq);
+		irq_set_priority_next_level(dev, irq_from_level_3(irq), prio, flags);
+		return;
+} else
+#endif
+	if (level == 2) {
+		dev = z_get_sw_isr_device_from_irq(irq);
+		irq_set_priority_next_level(dev, irq_from_level_2(irq), prio, flags);
+		return;
+	}
+#endif
 
 	__ASSERT(prio < CONFIG_NUM_IRQ_PRIO_LEVELS,
 		 "invalid priority %d for irq %d", prio, irq);
