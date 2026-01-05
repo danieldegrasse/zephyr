@@ -22,8 +22,8 @@
 #include <zephyr/drivers/dma.h>
 #include <zephyr/ztest.h>
 
-static __aligned(32) uint8_t tx_data[CONFIG_DMA_CYCLIC_XFER_SIZE];
-static __aligned(32) uint8_t rx_data[CONFIG_DMA_CYCLIC_XFER_SIZE];
+static __aligned(CONFIG_DMA_CYCLIC_ALIGNMENT) uint8_t tx_data[CONFIG_DMA_CYCLIC_XFER_SIZE];
+static __aligned(CONFIG_DMA_CYCLIC_ALIGNMENT) uint8_t rx_data[CONFIG_DMA_CYCLIC_XFER_SIZE];
 
 K_SEM_DEFINE(xfer_sem, 0, 1);
 
@@ -48,7 +48,7 @@ static int test_cyclic(void)
 		tx_data[i] = i;
 	}
 
-	dma = DEVICE_DT_GET(DT_ALIAS(dma0));
+	dma = DEVICE_DT_GET(DT_NODELABEL(tst_dma0));
 	if (!device_is_ready(dma)) {
 		TC_PRINT("dma controller device is not ready\n");
 		return TC_FAIL;
