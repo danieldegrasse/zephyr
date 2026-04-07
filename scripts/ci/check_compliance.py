@@ -1654,6 +1654,7 @@ flagged.
         "TEST1",
         "TFM_SPM_BACKEND_IPC",  # Used in TFM sample dummy partition - belongs to TFM
         "TFM_SPM_BACKEND_SFN",  # Used in TFM sample dummy partition - belongs to TFM
+        "TEST_SINGLE_CPU", # Used in MBOX test
         # Defined in modules/hal_nxp/mcux/mcux-sdk-ng/basic.cmake.
         # It is used by MCUX SDK cmake functions to add content
         # based on current toolchain.
