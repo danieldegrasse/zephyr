@@ -50,7 +50,67 @@
 		compatible = "clock-mux";
 		reg = <0x50042000 0x3>;
 		offset = <0x10>;
-		input-sources = <&clk_mgmt_pclk &clk_mgmt_ibro>;
+		input-sources = <&clk_mgmt_uart_pclk &clk_mgmt_ibro>;
+
+		bclk_uart0: bclk_uart0 {
+			#clock-cells = <0>;
+			compatible = "clock-output";
+
+			/*
+			 * Since the sys_clk is what feeds the pclk, the following states
+			 * must only be enabled when the corresponding sys_clk state is
+			 * active. If there's a mismatch, the actual frequency will be
+			 * different than what the state specifies.
+			 */
+
+			/* Depends on sys_clk_erfo_32 */
+			bclk_uart0_16: bclk_uart0_16 {
+				compatible = "clock-state";
+				clocks = <&clk_mgmt_uart_pclk 1 &bclk_src 0>;
+				clock-frequency = <DT_FREQ_M(16)>;
+			};
+
+			/* Depends on sys_clk_erfo_16 */
+			bclk_uart0_8: bclk_uart0_8 {
+				compatible = "clock-state";
+				clocks = <&clk_mgmt_uart_pclk 1 &bclk_src 0>;
+				clock-frequency = <DT_FREQ_M(8)>;
+			};
+
+			/* Depends on sys_clk_erfo_8 */
+			bclk_uart0_4: bclk_uart0_4 {
+				compatible = "clock-state";
+				clocks = <&clk_mgmt_uart_pclk 1 &bclk_src 0>;
+				clock-frequency = <DT_FREQ_M(4)>;
+			};
+
+			/* Depends on sys_clk_ipo */
+			bclk_uart0_ipo: bclk_uart0_ipo {
+				compatible = "clock-state";
+				clocks = <&clk_mgmt_uart_pclk 1 &bclk_src 0>;
+				clock-frequency = <DT_FREQ_M(25)>;
+			};
+
+			/* Depends on sys_clk_32k */
+			bclk_uart0_16k: bclk_uart0_16k {
+				compatible = "clock-state";
+				clocks = <&clk_mgmt_uart_pclk 1 &bclk_src 0>;
+				clock-frequency = <16384>;
+			};
+
+			/* When using ibro, sys_clk is not a parent clock, so only the ibro source is used to determine the frequency. */
+			bclk_uart0_ibro: bclk_uart0_ibro {
+				compatible = "clock-state";
+				clocks = <&clk_mgmt_ibro 1 &clk_mgmt_uart_pclk 1 &bclk_src 1>;
+				clock-frequency = <7372800>;
+			};
+
+			bclk_uart0_off: bclk_uart0_off {
+				compatible = "clock-state";
+				clocks = <&clk_mgmt_uart_pclk 0>;
+				clock-frequency = <0>;
+			};
+		};
 	};
 };
 
@@ -162,60 +222,10 @@
 	clk_mgmt_uart_pclk: clk_mgmt_uart_pclk@24 {
 		#clock-cells = <1>;
 		compatible = "clock-gate";
-		input = <&bclk_src>;
+		input = <&clk_mgmt_pclk>;
 		reg = <0x24 0x1>;
 		offset = <0x9>;
-
-		bclk_uart0: bclk_uart0 {
-			#clock-cells = <0>;
-			compatible = "clock-output";
-
-			/* sys_clk feeds clk_mgmt_pclk so the following states duplicate the sys_clk states */
-			bclk_uart0_16: bclk_uart0_16 {
-				compatible = "clock-state";
-				clocks = <&clk_mgmt_erfo 1 &mux_sysclk_sel 2 &scale_sysclk_div 0 &bclk_src 0 &clk_mgmt_uart_pclk 1>;
-				clock-frequency = <DT_FREQ_M(16)>;
-			};
-
-			bclk_uart0_8: bclk_uart0_8 {
-				compatible = "clock-state";
-				clocks = <&clk_mgmt_erfo 1 &mux_sysclk_sel 2 &scale_sysclk_div 1 &bclk_src 0 &clk_mgmt_uart_pclk 1>;
-				clock-frequency = <DT_FREQ_M(8)>;
-			};
-
-			bclk_uart0_4: bclk_uart0_4 {
-				compatible = "clock-state";
-				clocks = <&clk_mgmt_erfo 1 &mux_sysclk_sel 2 &scale_sysclk_div 2 &bclk_src 0 &clk_mgmt_uart_pclk 1>;
-				clock-frequency = <DT_FREQ_M(4)>;
-			};
-
-			bclk_uart0_ipo: bclk_uart0_ipo {
-				compatible = "clock-state";
-				clocks = <&clk_mgmt_ipo 1 &mux_sysclk_sel 0 &scale_sysclk_div 0 &bclk_src 0 &clk_mgmt_uart_pclk 1>;
-				clock-frequency = <DT_FREQ_M(25)>;
-			};
-
-			bclk_uart0_16k: bclk_uart0_16k {
-				compatible = "clock-state";
-				clocks = <&clk_mgmt_ertco 1 &clk_mgmt_ertco32k 1 &mux_32k_sel 0
-					  &mux_sysclk_sel 6 &scale_sysclk_div 0 &bclk_src 0 &clk_mgmt_uart_pclk 1>;
-				clock-frequency = <16384>;
-			};
-
-			/* When using ibro, sys_clk is not a parent clock, so only the ibro source is used to determine the frequency. */
-			bclk_uart0_ibro: bclk_uart0_ibro {
-				compatible = "clock-state";
-				clocks = <&clk_mgmt_ibro 1 &bclk_src 1 &clk_mgmt_uart_pclk 1>;
-				clock-frequency = <7372800>;
-			};
-
-			/* This disables the UART clock */
-			bclk_uart0_off: bclk_uart0_off {
-				compatible = "clock-state";
-				clocks = <&clk_mgmt_uart_pclk 0>;
-				clock-frequency = <0>;
-			};
-		};
+		invert;
 	};
 };
 
@@ -249,8 +259,8 @@
 	/* Can only have a max of 5 clock states right now. Skip some that we won't use */
 	clock-state-0 = <&bclk_uart0_16>;
 	clock-state-1 = <&bclk_uart0_8>;
-	clock-state-2 = <&bclk_uart0_ipo>;
-	clock-state-3 = <&bclk_uart0_ibro>;
-	clock-state-4 = <&bclk_uart0_off>;
-	clock-state-names = "default", "medium", "turbo", "ibro", "off";
+	clock-state-2 = <&bclk_uart0_4>;
+	clock-state-3 = <&bclk_uart0_ipo>;
+	clock-state-4 = <&bclk_uart0_ibro>;
+	clock-state-names = "default", "medium", "low", "turbo", "ibro";
 };
