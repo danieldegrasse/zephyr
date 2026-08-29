@@ -51,3 +51,4 @@
 };
 
 #include "max32657_common.dtsi"
+#include "max32657_clocks.dtsi"

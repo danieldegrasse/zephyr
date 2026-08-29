@@ -9,6 +9,7 @@
 #include <wrap_max32_dma.h>
 #endif
 #include <zephyr/drivers/pinctrl.h>
+#include <zephyr/drivers/clock_management.h>
 #include <zephyr/drivers/uart.h>
 #ifdef CONFIG_PM
 #include <zephyr/pm/policy.h>
@@ -36,8 +37,13 @@ struct max32_uart_dma_config {
 struct max32_uart_config {
 	mxc_uart_regs_t *regs;
 	const struct pinctrl_dev_config *pctrl;
+#ifdef CONFIG_CLOCK_MANAGEMENT
+	const struct clock_output *clock_output;
+	clock_management_state_t clock_state;
+#else
 	const struct device *clock;
 	struct max32_perclk perclk;
+#endif
 	struct uart_config uart_conf;
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
 	uart_irq_config_func_t irq_config_func;
@@ -196,6 +202,10 @@ static int api_configure(const struct device *dev, const struct uart_config *uar
 	const struct max32_uart_config *const cfg = dev->config;
 	mxc_uart_regs_t *regs = cfg->regs;
 	struct max32_uart_data *data = dev->data;
+#ifdef CONFIG_CLOCK_MANAGEMENT
+	uint32_t clock_rate;
+	uint32_t clock_div;
+#endif
 
 	/*
 	 *  Set parity
@@ -278,10 +288,36 @@ static int api_configure(const struct device *dev, const struct uart_config *uar
 	/*
 	 *  Set baudrate
 	 */
+#ifdef CONFIG_CLOCK_MANAGEMENT
+	clock_rate = clock_management_get_rate(cfg->clock_output);
+	if (clock_rate == 0) {
+		return -ENOTSUP;
+	}
+
+	/*
+	 * The max32 hal does not have a function to set the baudrate given the
+	 * input clock frequency. We manually calculate it and set it here.
+	 */
+	clock_div = clock_rate / uart_cfg->baudrate;
+	if (clock_div == 0 || (clock_rate % uart_cfg->baudrate) > (uart_cfg->baudrate / 2)) {
+		clock_div += 1;
+	}
+
+	regs->clkdiv = clock_div;
+
+	/* The SetFrequency() call has a side effect of enabling the baud clock */
+	regs->ctrl |= BIT(MXC_F_UART_CTRL_CLK_EN_POS);
+#else
+	/*
+	 * Given the selected clock source, the following hal call knows what its
+	 * frequency is as it relies on the global SystemCoreClock variable.
+	 */
 	err = Wrap_MXC_UART_SetFrequency(regs, uart_cfg->baudrate, cfg->perclk.clk_src);
 	if (err < 0) {
 		return -ENOTSUP;
 	}
+#endif
+
 	/* In case of success keep configuration */
 	data->conf.baudrate = uart_cfg->baudrate;
 	return 0;
@@ -1000,16 +1036,51 @@ static void uart_max32_async_rx_timeout(struct k_work *work)
 
 #endif
 
+#ifdef CONFIG_CLOCK_MANAGEMENT_RUNTIME
+int uart_max32_clock_cb(const struct clock_management_event *ev, const void *data)
+{
+	const struct device *dev = data;
+	const struct max32_uart_config *const cfg = dev->config;
+
+	/*
+	 * The UART controller has no "enable/disable" bit. So we effectively treat
+	 * the baud clock bit as the enable/disable switch.
+	 */
+
+	if (ev->type == CLOCK_MANAGEMENT_PRE_RATE_CHANGE) {
+		/* Wait for the UART to become idle */
+		while (MXC_UART_ReadyForSleep(cfg->regs) != E_NO_ERROR) {
+		}
+		/* Stop the baud clock */
+		cfg->regs->ctrl &= ~BIT(MXC_F_UART_CTRL_CLK_EN_POS);
+	} else if (ev->type == CLOCK_MANAGEMENT_POST_RATE_CHANGE) {
+		/* Start the baud clock */
+		cfg->regs->ctrl |= BIT(MXC_F_UART_CTRL_CLK_EN_POS);
+	}
+
+	return 0;
+}
+#endif
+
 static int uart_max32_pm_resume(const struct device *dev)
 {
 	int ret;
 	const struct max32_uart_config *const cfg = dev->config;
 
+#ifdef CONFIG_CLOCK_MANAGEMENT
+	/* Apply the default clock state */
+	ret = clock_management_apply_state(cfg->clock_output, cfg->clock_state);
+	if (ret < 0) {
+		LOG_ERR("Cannot apply UART clock state");
+		return ret;
+	}
+#else
 	ret = clock_control_on(cfg->clock, (clock_control_subsys_t)&cfg->perclk);
 	if (ret != 0) {
 		LOG_ERR("Cannot enable UART clock");
 		return ret;
 	}
+#endif
 
 	ret = pinctrl_apply_state(cfg->pctrl, PINCTRL_STATE_DEFAULT);
 	if (ret) {
@@ -1017,11 +1088,14 @@ static int uart_max32_pm_resume(const struct device *dev)
 	}
 
 	if (MXC_UART_GetRXThreshold(cfg->regs) == 0) {
+#ifndef CONFIG_CLOCK_MANAGEMENT
+		/* When clock management is enabled, this is handled by the clock management subsystem */
 		ret = Wrap_MXC_UART_SetClockSource(cfg->regs, cfg->perclk.clk_src);
 		if (ret != 0) {
 			LOG_ERR("Cannot set UART clock source");
 			return ret;
 		}
+#endif
 
 		ret = Wrap_MXC_UART_Init(cfg->regs);
 		if (ret) {
@@ -1046,6 +1120,13 @@ static int uart_max32_pm_resume(const struct device *dev)
 static int uart_max32_pm_suspend(const struct max32_uart_config *const cfg)
 {
 	int ret;
+#ifdef CONFIG_CLOCK_MANAGEMENT
+	const struct clock_management_rate_req req = {
+		.min_freq = 0,
+		.max_freq = 0,
+		.max_rank = 0,
+	};
+#endif
 
 	/* Move pins to sleep state */
 	ret = pinctrl_apply_state(cfg->pctrl, PINCTRL_STATE_SLEEP);
@@ -1061,10 +1142,18 @@ static int uart_max32_pm_suspend(const struct max32_uart_config *const cfg)
 	}
 
 	/* Disable clock */
+#ifdef CONFIG_CLOCK_MANAGEMENT
+	/* Request a rate of 0hz. This selects the state that sets the UART pclk disable bit */
+	ret = clock_management_req_rate(cfg->clock_output, &req);
+	if (ret != 0) {
+		LOG_ERR("Cannot set UART clock rate to 0");
+	}
+#else
 	ret = clock_control_off(cfg->clock, (clock_control_subsys_t)&cfg->perclk);
 	if (ret != 0) {
 		LOG_ERR("cannot disable UART clock");
 	}
+#endif
 
 	return ret;
 }
@@ -1102,20 +1191,31 @@ static int uart_max32_pm_action(const struct device *dev, enum pm_device_action 
 
 static int uart_max32_init(const struct device *dev)
 {
-	int ret;
-	const struct max32_uart_config *const cfg = dev->config;
-	mxc_uart_regs_t *regs = cfg->regs;
 	struct max32_uart_data *data = dev->data;
+	const struct max32_uart_config *const cfg = dev->config;
+#ifndef CONFIG_CLOCK_MANAGEMENT
+	int ret;
+	mxc_uart_regs_t *regs = cfg->regs;
 
 	if (!device_is_ready(cfg->clock)) {
 		LOG_ERR("Clock control device not ready");
 		return -ENODEV;
 	}
 
+	/*
+	 * This controls the PCLK disable bit in the GCR register. When clock
+	 * management is used, this bit is controlled by the clock management
+	 * subsystem, and should not be touched by the UART driver.
+	 */
 	ret = MXC_UART_Shutdown(regs);
 	if (ret) {
 		return ret;
 	}
+#endif
+
+#ifdef CONFIG_CLOCK_MANAGEMENT_RUNTIME
+	clock_management_set_callback(cfg->clock_output, uart_max32_clock_cb, dev);
+#endif
 
 	data->uart_dev = dev;
 
@@ -1198,8 +1298,23 @@ static DEVICE_API(uart, uart_max32_driver_api) = {
 #define MAX32_UART_USE_IRQ 0
 #endif
 
+#ifdef CONFIG_CLOCK_MANAGEMENT
+#define MAX32_CLK_DEFINE(n) CLOCK_MANAGEMENT_DT_INST_DEFINE_OUTPUT(n)
+#define MAX32_CLK_INIT(n) \
+	.clock_output = CLOCK_MANAGEMENT_DT_INST_GET_OUTPUT(n), \
+	.clock_state = CLOCK_MANAGEMENT_DT_INST_GET_STATE(n, default, default),
+#else
+#define MAX32_CLK_DEFINE(n)
+#define MAX32_CLK_INIT(n) \
+	.clock = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(n)), \
+	.perclk.bus = DT_INST_CLOCKS_CELL(n, offset), \
+	.perclk.bit = DT_INST_CLOCKS_CELL(n, bit), \
+	.perclk.clk_src = DT_INST_PROP_OR(n, clock_source, ADI_MAX32_PRPH_CLK_SRC_PCLK),
+#endif
+
 #define MAX32_UART_INIT(_num)                                                                      \
 	PINCTRL_DT_INST_DEFINE(_num);                                                              \
+	MAX32_CLK_DEFINE(_num) \
 	IF_ENABLED(MAX32_UART_USE_IRQ,                                                             \
 		   (static void uart_max32_irq_init_##_num(const struct device *dev)               \
 		   {             \
@@ -1210,11 +1325,7 @@ static DEVICE_API(uart, uart_max32_driver_api) = {
 	static const struct max32_uart_config max32_uart_config_##_num = {                         \
 		.regs = (mxc_uart_regs_t *)DT_INST_REG_ADDR(_num),                                 \
 		.pctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(_num),                                     \
-		.clock = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(_num)),                                 \
-		.perclk.bus = DT_INST_CLOCKS_CELL(_num, offset),                                   \
-		.perclk.bit = DT_INST_CLOCKS_CELL(_num, bit),                                      \
-		.perclk.clk_src =                                                                  \
-			DT_INST_PROP_OR(_num, clock_source, ADI_MAX32_PRPH_CLK_SRC_PCLK),          \
+		MAX32_CLK_INIT(_num) \
 		.uart_conf.baudrate = DT_INST_PROP(_num, current_speed),                           \
 		.uart_conf.parity = DT_INST_ENUM_IDX(_num, parity),                                \
 		.uart_conf.data_bits = DT_INST_ENUM_IDX(_num, data_bits),                          \
