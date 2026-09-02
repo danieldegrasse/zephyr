@@ -136,6 +136,10 @@ GDATA(_k_syscall_table)
 GTEXT(__soc_handle_all_irqs)
 #endif
 
+#ifdef CONFIG_RISCV_SOC_HAS_CUSTOM_EXCEPTION_HANDLING
+GTEXT(__soc_handle_exception)
+#endif
+
 #ifdef CONFIG_CUSTOM_STACK_GUARD
 GTEXT(z_riscv_custom_stack_guard_enable)
 GTEXT(z_riscv_custom_stack_guard_disable)
@@ -170,6 +174,10 @@ GTEXT(_isr_wrapper)
  * Handler called upon each exception/interrupt/fault
  */
 SECTION_FUNC(exception.entry, _isr_wrapper)
+
+#ifdef CONFIG_RISCV_SOC_HAS_CUSTOM_EXCEPTION_HANDLING
+	call __soc_handle_exception
+#endif
 
 /* Provide requested alignment, which depends e.g. on MTVEC format */
 .balign CONFIG_RISCV_TRAP_HANDLER_ALIGNMENT
