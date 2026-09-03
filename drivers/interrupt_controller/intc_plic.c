@@ -620,6 +620,20 @@ static int plic_init(const struct device *dev)
 	}
 #endif
 
+#ifdef CONFIG_PLIC_SUPPORTS_VECTORED_MODE
+	/*
+	 * Vectored mode is only supported by the PLIC connected to the machine
+	 * external interrupt.
+	 */
+	if (config->irq == RISCV_IRQ_MEXT) {
+		/*
+		 * Enable vectored mode in the Andes PLIC Feature Enable
+		 * Register (PLIC base address + offset 0x0).
+		 */
+		sys_write32(BIT(1), prio_addr);
+	}
+#endif /* CONFIG_PLIC_SUPPORTS_VECTORED_MODE */
+
 	/* Configure IRQ for PLIC driver */
 	config->irq_config_func();
 
@@ -876,6 +890,50 @@ SHELL_STATIC_SUBCMD_SET_CREATE(plic_cmds,
 
 SHELL_CMD_REGISTER(plic, &plic_cmds, "PLIC shell commands", NULL);
 #endif /* CONFIG_PLIC_SHELL */
+
+#ifdef CONFIG_PLIC_SUPPORTS_VECTORED_MODE
+unsigned long __soc_handle_irq(unsigned long cause)
+{
+	unsigned long mcause;
+
+	/*
+	 * Load mcause directly to see if the MEXT bit is set.
+	 * If so, we know this was a software handled interrupt,
+	 * since the MEXT bit will only be set by the __soc_handle_exception
+	 * wrapper
+	 */
+	__asm__ volatile("csrr %0, mcause" : "=r"(mcause));
+
+	if (mcause == cause) {
+		/*
+		 * MEXT bit is clear. We need to handle the complete protocol
+		 * ourselves, since the vectored mode only automatically handles
+		 * the claim part of the protocol. Cause will be set to the
+		 * interrupt line number.
+		 */
+		const struct device *dev = DEVICE_DT_INST_GET(0);
+		mem_addr_t claim_complete_addr = get_claim_complete_addr(dev);
+
+		/*
+		 * Write to the claim/complete register to indicate to the PLIC
+		 * controller that the IRQ has been handled.
+		 */
+		sys_write32(cause, claim_complete_addr);
+
+		/*
+		 * Ensure the completion message reaches the PLIC before
+		 * interrupts are re-enabled (e.g. by mret).
+		 * This barirrer is only required for vectored mode.
+		 * In non-vectored mode, the next interrupt claim (a load
+		 * instruction) is guaranteed to reach the PLIC after the
+		 * previous completion (a store instruction).
+		 */
+		__asm__ volatile("fence o, o");
+	}
+
+	return cause;
+}
+#endif /* CONFIG_PLIC_SUPPORTS_VECTORED_MODE */
 
 #define PLIC_MIN_IRQ_NUM(n) MIN(DT_INST_PROP(n, riscv_ndev), CONFIG_MAX_IRQ_PER_AGGREGATOR)
 

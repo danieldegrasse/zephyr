@@ -13,6 +13,17 @@ config PLIC
 
 if PLIC
 
+config PLIC_SUPPORTS_VECTORED_MODE
+	bool
+	default y
+	depends on DT_HAS_ANDESTECH_NCEPLIC100_ENABLED
+	depends on RISCV_CUSTOM_CSR_ANDES_VECTORED_PLIC
+	help
+	  Enabled when the PLIC supports vectored mode.
+	  Note that PLIC vectored mode does not allow an interrupt source to be
+	  enabled for more than one target, as the hardware does not prevent
+	  multiple targets from servicing the same interrupt source.
+
 config PLIC_SUPPORTS_SOFT_INTERRUPT
 	bool
 	default y
