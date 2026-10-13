@@ -14,6 +14,8 @@ extern "C" {
 #endif
 
 #define ST_STM32_OSC_BYPASS_SHIFT     1
+#define ST_STM32_PLL_POSTDIV_EN_SHIFT 31
+#define ST_STM32_PLL_POSTDIV_DIV_MASK GENMASK(30, 0)
 
 /** @cond INTERNAL_HIDDEN */
 
@@ -25,6 +27,11 @@ extern "C" {
 #define Z_CLOCK_MANAGEMENT_DATA_DEFINE_st_stm32_clock_source(node_id, prop, idx)
 #define Z_CLOCK_MANAGEMENT_DATA_GET_st_stm32_clock_source(node_id, prop, idx)                      \
 	DT_PHA_BY_IDX(node_id, prop, idx, gate)
+
+#define Z_CLOCK_MANAGEMENT_DATA_DEFINE_st_stm32_pll_postdiv(node_id, prop, idx)
+#define Z_CLOCK_MANAGEMENT_DATA_GET_st_stm32_pll_postdiv(node_id, prop, idx)                       \
+	((DT_PHA_BY_IDX(node_id, prop, idx, divider) & ST_STM32_PLL_POSTDIV_DIV_MASK) |            \
+	 (DT_PHA_BY_IDX(node_id, prop, idx, enable) << ST_STM32_PLL_POSTDIV_EN_SHIFT))
 
 
 /** @endcond */

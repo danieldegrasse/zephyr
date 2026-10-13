@@ -23,6 +23,14 @@ config CLOCK_MANAGEMENT_STM32_OSC
 	help
 	  STM32 oscillator driver for external oscillators with bypass support
 
+config CLOCK_MANAGEMENT_STM32_PLL_POSTDIV
+	bool "STM32 PLL post-divider driver"
+	default y
+	depends on DT_HAS_ST_STM32_PLL_POSTDIV_ENABLED
+	select CLOCK_MANAGEMENT_STM32
+	help
+	  STM32 PLL output post-divider driver (P/Q/R outputs)
+
 if CLOCK_MANAGEMENT_STM32_CLOCK_SOURCE || CLOCK_MANAGEMENT_STM32_OSC
 
 config STM32_CLOCK_READY_TIMEOUT

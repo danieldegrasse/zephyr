@@ -1,0 +1,58 @@
+# Copyright 2026 Analog Devices Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  STM32 PLL post-divider (P/Q/R output). Divides the PLL VCO output by a
+  programmable factor and has its own output enable bit.
+
+  Accepts two specifiers:
+    [0] Division factor
+    [1] Output enable (0 = disabled, 1 = enabled)
+
+compatible: "st,stm32-pll-postdiv"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Two register ranges:
+        [0] PLLxDIVR register containing the divider field
+        [1] RCC_PLLCFGR register containing the output enable bit
+
+  offset:
+    type: int
+    required: true
+    description: |
+      Bit offset of the divider field within the PLLxDIVR register.
+
+  width:
+    type: int
+    required: true
+    description: |
+      Bit width of the divider field.
+
+  enable-offset:
+    type: int
+    required: true
+    description: |
+      Bit offset of the output enable bit within RCC_PLLCFGR.
+
+  input:
+    type: phandle
+    required: true
+    description: |
+      Clock node for the parent clock.
+
+  st,no-odd:
+    type: boolean
+    description: |
+      When set, the post-divider does not support odd division factors
+
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - divider
+  - enable
