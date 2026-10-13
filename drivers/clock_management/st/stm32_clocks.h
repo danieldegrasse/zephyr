@@ -33,6 +33,10 @@ extern "C" {
 	((DT_PHA_BY_IDX(node_id, prop, idx, divider) & ST_STM32_PLL_POSTDIV_DIV_MASK) |            \
 	 (DT_PHA_BY_IDX(node_id, prop, idx, enable) << ST_STM32_PLL_POSTDIV_EN_SHIFT))
 
+#define Z_CLOCK_MANAGEMENT_DATA_DEFINE_st_stm32_clock_div(node_id, prop, idx)
+#define Z_CLOCK_MANAGEMENT_DATA_GET_st_stm32_clock_div(node_id, prop, idx)                         \
+	DT_PHA_BY_IDX(node_id, prop, idx, divider)
+
 
 /** @endcond */
 

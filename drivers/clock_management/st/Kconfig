@@ -31,6 +31,15 @@ config CLOCK_MANAGEMENT_STM32_PLL_POSTDIV
 	help
 	  STM32 PLL output post-divider driver (P/Q/R outputs)
 
+config CLOCK_MANAGEMENT_STM32_CLOCK_DIV
+	bool "STM32 clock divider driver"
+	default y
+	depends on DT_HAS_ST_STM32_CLOCK_DIV_ENABLED
+	select CLOCK_MANAGEMENT_STM32
+	help
+	  STM32 clock divider driver supporting power-of-2, linear,
+	  and RTCPRE divider encodings
+
 if CLOCK_MANAGEMENT_STM32_CLOCK_SOURCE || CLOCK_MANAGEMENT_STM32_OSC
 
 config STM32_CLOCK_READY_TIMEOUT

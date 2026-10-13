@@ -1,0 +1,63 @@
+# Copyright 2026 Analog Devices Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  STM32 clock divider/prescaler. Divides its input clock by a configurable
+  factor determined by a register bitfield.
+
+  Accepts one specifier which sets the integer division factor. Setting this
+  value to 0 has undefined behavior. The supported range of values depends
+  on the specific clock node's bitfield width and divider encoding type.
+
+  The encoding of the divider field is controlled by the "div-type" property:
+    - "pow2":   Power-of-2 bus prescaler encoding.
+                Field values 0-7 map to /1; 8-15 map to /2../512.
+    - "linear": Linear encoding where the field value is used directly as
+                the division factor.
+                A field value of 0 means no clock output.
+    - "rtcpre": HSE-to-RTC prescaler. The field value is the division
+                factor; values 0 and 1 mean no clock output.
+
+compatible: "st,stm32-clock-div"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Register address containing the divider bitfield.
+
+  offset:
+    type: int
+    required: true
+    description: |
+      Bit offset of the divider field within the register.
+
+  width:
+    type: int
+    required: true
+    description: |
+      Bit width of the divider field.
+
+  div-type:
+    type: string
+    required: true
+    enum:
+      - "pow2"
+      - "linear"
+      - "rtcpre"
+    description: |
+      Encoding type for the divider bitfield.
+
+  input:
+    type: phandle
+    required: true
+    description: |
+      Clock node that is the input to this divider.
+
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - divider
