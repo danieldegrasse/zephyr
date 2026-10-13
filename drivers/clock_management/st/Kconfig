@@ -15,7 +15,15 @@ config CLOCK_MANAGEMENT_STM32_CLOCK_SOURCE
 	  STM32 clock source driver for fixed-frequency oscillators
 	  that can be gated/ungated
 
-if CLOCK_MANAGEMENT_STM32_CLOCK_SOURCE
+config CLOCK_MANAGEMENT_STM32_OSC
+	bool "STM32 oscillator driver"
+	default y
+	depends on DT_HAS_ST_STM32_OSC_ENABLED
+	select CLOCK_MANAGEMENT_STM32
+	help
+	  STM32 oscillator driver for external oscillators with bypass support
+
+if CLOCK_MANAGEMENT_STM32_CLOCK_SOURCE || CLOCK_MANAGEMENT_STM32_OSC
 
 config STM32_CLOCK_READY_TIMEOUT
 	int "STM32 clock ready timeout (in microseconds)"
@@ -24,4 +32,4 @@ config STM32_CLOCK_READY_TIMEOUT
 	  Timeout value for waiting for STM32 clock gates to become enabled or
 	  disabled after modifying their state
 
-endif # CLOCK_MANAGEMENT_STM32_CLOCK_SOURCE
+endif # CLOCK_MANAGEMENT_STM32_CLOCK_SOURCE || CLOCK_MANAGEMENT_STM32_OSC

@@ -17,6 +17,11 @@ extern "C" {
 
 /** @cond INTERNAL_HIDDEN */
 
+#define Z_CLOCK_MANAGEMENT_DATA_DEFINE_st_stm32_osc(node_id, prop, idx)
+#define Z_CLOCK_MANAGEMENT_DATA_GET_st_stm32_osc(node_id, prop, idx)                               \
+	((DT_PHA_BY_IDX(node_id, prop, idx, bypass) << ST_STM32_OSC_BYPASS_SHIFT) |                \
+	 DT_PHA_BY_IDX(node_id, prop, idx, gate))
+
 #define Z_CLOCK_MANAGEMENT_DATA_DEFINE_st_stm32_clock_source(node_id, prop, idx)
 #define Z_CLOCK_MANAGEMENT_DATA_GET_st_stm32_clock_source(node_id, prop, idx)                      \
 	DT_PHA_BY_IDX(node_id, prop, idx, gate)
