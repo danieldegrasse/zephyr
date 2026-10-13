@@ -57,6 +57,20 @@ struct stm32h7_pll_cfg {
 #define Z_CLOCK_MANAGEMENT_DATA_GET_st_stm32h7_pll(node_id, prop, idx)                             \
 	&_CONCAT(stm32h7_pll_cfg_, _CONCAT(DT_DEP_ORD(node_id), idx))
 
+struct stm32l4_pll_cfg {
+	uint8_t plln;
+	uint8_t enable;
+};
+
+#define Z_CLOCK_MANAGEMENT_DATA_DEFINE_st_stm32l4_pll(node_id, prop, idx)                          \
+	static const struct stm32l4_pll_cfg _CONCAT(stm32l4_pll_cfg_,                              \
+						    _CONCAT(DT_DEP_ORD(node_id), idx)) = {         \
+		.plln = DT_PHA_BY_IDX(node_id, prop, idx, plln),                                   \
+		.enable = DT_PHA_BY_IDX(node_id, prop, idx, enable),                               \
+	};
+#define Z_CLOCK_MANAGEMENT_DATA_GET_st_stm32l4_pll(node_id, prop, idx)                             \
+	&_CONCAT(stm32l4_pll_cfg_, _CONCAT(DT_DEP_ORD(node_id), idx))
+
 /** @endcond */
 
 #ifdef __cplusplus

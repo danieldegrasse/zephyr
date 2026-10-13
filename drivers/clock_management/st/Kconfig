@@ -49,6 +49,15 @@ config CLOCK_MANAGEMENT_STM32H7_PLL
 	  STM32H7 fractional-N PLL driver for the three PLLs
 	  (PLL1/2/3) on the STM32H7 series
 
+config CLOCK_MANAGEMENT_STM32L4_PLL
+	bool "STM32L4 PLL driver"
+	default y
+	depends on DT_HAS_ST_STM32L4_PLL_ENABLED
+	select CLOCK_MANAGEMENT_STM32
+	help
+	  STM32L4 integer-N PLL driver for the main PLL and PLLSAI1
+	  on the STM32L4 series
+
 if CLOCK_MANAGEMENT_STM32_CLOCK_SOURCE || CLOCK_MANAGEMENT_STM32_OSC
 
 config STM32_CLOCK_READY_TIMEOUT
@@ -66,3 +75,10 @@ config STM32H7_PLL_LOCK_TIMEOUT
 	depends on CLOCK_MANAGEMENT_STM32H7_PLL
 	help
 	  Timeout value for waiting for the STM32H7 PLLs to lock after being enabled
+
+config STM32L4_PLL_LOCK_TIMEOUT
+	int "STM32L4 PLL lock timeout (in microseconds)"
+	default 2000
+	depends on CLOCK_MANAGEMENT_STM32L4_PLL
+	help
+	  Timeout value for waiting for the STM32L4 PLLs to lock after being enabled

@@ -1,0 +1,44 @@
+# Copyright 2026 Analog Devices Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  STM32L4 PLL (integer VCO). Describes one of the two PLLs
+  on the STM32L4, each with an integer-N VCO. The VCO output frequency is:
+
+    f_VCO = f_ref * DIVN
+
+  where f_ref is the input clock after the DIVM prescaler.
+
+  Accepts two specifiers that configure the VCO:
+    [0] DIVN  - VCO multiplication factor (N)
+    [1] Enable (0 = disable, nonzero = enable)
+
+compatible: "st,stm32l4-pll"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+        [0] PLLCFGR register base
+        [1] RCC_CR register base (used for enable and ready bit)
+
+  enable-bit:
+    type: int
+    required: true
+    description: |
+      Bit offset of the PLL enable bit (e.g. PLL1ON) within the enable register.
+
+  input:
+    type: phandle
+    required: true
+    description: |
+      Clock node for the PLL reference input (after the DIVMx prescaler).
+
+  "#clock-cells":
+    const: 2
+
+clock-cells:
+  - divn
+  - enable
