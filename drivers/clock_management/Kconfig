@@ -81,6 +81,7 @@ config CLOCK_MANAGEMENT_MUX
 	  select a clock parent.
 
 source "drivers/clock_management/nxp_syscon/Kconfig"
+source "drivers/clock_management/st/Kconfig"
 
 module = CLOCK_MANAGEMENT
 module-str = clock-management
