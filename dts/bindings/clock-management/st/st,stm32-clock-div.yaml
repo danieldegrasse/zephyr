@@ -46,6 +46,7 @@ properties:
     enum:
       - "pow2"
       - "linear"
+      - "linear-aon"
       - "rtcpre"
     description: |
       Encoding type for the divider bitfield.

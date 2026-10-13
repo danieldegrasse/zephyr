@@ -12,6 +12,7 @@
 enum stm32_div_type {
 	STM32_DIV_POW2,
 	STM32_DIV_LINEAR,
+	STM32_DIV_LINEAR_AON,
 	STM32_DIV_RTCPRE,
 	STM32_DIV_MAX,
 };
@@ -50,6 +51,8 @@ static uint32_t stm32_div_field_to_divisor(enum stm32_div_type type, uint32_t fi
 		}
 	case STM32_DIV_LINEAR:
 		return field;
+	case STM32_DIV_LINEAR_AON:
+		return field + 1;
 	case STM32_DIV_RTCPRE:
 		return (field <= 1) ? 0 : field;
 	case STM32_DIV_MAX:
@@ -74,6 +77,8 @@ static uint32_t stm32_div_divisor_to_field(enum stm32_div_type type, uint32_t di
 		}
 	case STM32_DIV_LINEAR:
 		return CLAMP(divisor, 1, max_field);
+	case STM32_DIV_LINEAR_AON:
+		return CLAMP(divisor - 1, 0, max_field);
 	case STM32_DIV_RTCPRE:
 		return CLAMP(divisor, 2, max_field);
 	case STM32_DIV_MAX:
