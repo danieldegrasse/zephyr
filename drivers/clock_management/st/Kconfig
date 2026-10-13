@@ -40,6 +40,15 @@ config CLOCK_MANAGEMENT_STM32_CLOCK_DIV
 	  STM32 clock divider driver supporting power-of-2, linear,
 	  and RTCPRE divider encodings
 
+config CLOCK_MANAGEMENT_STM32H7_PLL
+	bool "STM32H7 PLL driver"
+	default y
+	depends on DT_HAS_ST_STM32H7_PLL_ENABLED
+	select CLOCK_MANAGEMENT_STM32
+	help
+	  STM32H7 fractional-N PLL driver for the three PLLs
+	  (PLL1/2/3) on the STM32H7 series
+
 if CLOCK_MANAGEMENT_STM32_CLOCK_SOURCE || CLOCK_MANAGEMENT_STM32_OSC
 
 config STM32_CLOCK_READY_TIMEOUT
@@ -50,3 +59,10 @@ config STM32_CLOCK_READY_TIMEOUT
 	  disabled after modifying their state
 
 endif # CLOCK_MANAGEMENT_STM32_CLOCK_SOURCE || CLOCK_MANAGEMENT_STM32_OSC
+
+config STM32H7_PLL_LOCK_TIMEOUT
+	int "STM32H7 PLL lock timeout (in microseconds)"
+	default 2000
+	depends on CLOCK_MANAGEMENT_STM32H7_PLL
+	help
+	  Timeout value for waiting for the STM32H7 PLLs to lock after being enabled

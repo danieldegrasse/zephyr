@@ -37,6 +37,25 @@ extern "C" {
 #define Z_CLOCK_MANAGEMENT_DATA_GET_st_stm32_clock_div(node_id, prop, idx)                         \
 	DT_PHA_BY_IDX(node_id, prop, idx, divider)
 
+struct stm32h7_pll_cfg {
+	uint16_t divn;
+	uint16_t fracn;
+	uint8_t rge;
+	uint8_t vcosel;
+	uint8_t enable;
+};
+
+#define Z_CLOCK_MANAGEMENT_DATA_DEFINE_st_stm32h7_pll(node_id, prop, idx)                          \
+	static const struct stm32h7_pll_cfg _CONCAT(stm32h7_pll_cfg_,                              \
+						    _CONCAT(DT_DEP_ORD(node_id), idx)) = {         \
+		.divn = DT_PHA_BY_IDX(node_id, prop, idx, divn),                                   \
+		.fracn = DT_PHA_BY_IDX(node_id, prop, idx, fracn),                                 \
+		.rge = DT_PHA_BY_IDX(node_id, prop, idx, rge),                                     \
+		.vcosel = DT_PHA_BY_IDX(node_id, prop, idx, vcosel),                               \
+		.enable = DT_PHA_BY_IDX(node_id, prop, idx, enable),                               \
+	};
+#define Z_CLOCK_MANAGEMENT_DATA_GET_st_stm32h7_pll(node_id, prop, idx)                             \
+	&_CONCAT(stm32h7_pll_cfg_, _CONCAT(DT_DEP_ORD(node_id), idx))
 
 /** @endcond */
 
