@@ -215,7 +215,7 @@
 		/* RCC_PLL1DIVR[DIVP1], enable RCC_PLLCFGR[DIVP1EN] */
 		compatible = "st,stm32-pll-postdiv";
 		#clock-cells = <1>;
-		st,no-odd;
+		div-type = "no-odd";
 		enable-offset = <0x10>;
 		reg = <0x58024430 0x2>, <0x5802442c 0x2>;
 		offset = <0x9>;
@@ -227,6 +227,7 @@
 		/* RCC_PLL1DIVR[DIVQ1], enable RCC_PLLCFGR[DIVQ1EN] */
 		compatible = "st,stm32-pll-postdiv";
 		#clock-cells = <1>;
+		div-type = "linear";
 		enable-offset = <0x11>;
 		reg = <0x58024430 0x2>, <0x5802442c 0x2>;
 		offset = <0x10>;
@@ -238,6 +239,7 @@
 		/* RCC_PLL1DIVR[DIVR1], enable RCC_PLLCFGR[DIVR1EN] */
 		compatible = "st,stm32-pll-postdiv";
 		#clock-cells = <1>;
+		div-type = "linear";
 		enable-offset = <0x12>;
 		reg = <0x58024430 0x2>, <0x5802442c 0x2>;
 		offset = <0x18>;
@@ -266,6 +268,7 @@
 		/* RCC_PLL2DIVR[DIVP2], enable RCC_PLLCFGR[DIVP2EN] */
 		compatible = "st,stm32-pll-postdiv";
 		#clock-cells = <1>;
+		div-type = "linear";
 		enable-offset = <0x13>;
 		reg = <0x58024438 0x2>, <0x5802442c 0x2>;
 		offset = <0x9>;
@@ -277,6 +280,7 @@
 		/* RCC_PLL2DIVR[DIVQ2], enable RCC_PLLCFGR[DIVQ2EN] */
 		compatible = "st,stm32-pll-postdiv";
 		#clock-cells = <1>;
+		div-type = "linear";
 		enable-offset = <0x14>;
 		reg = <0x58024438 0x2>, <0x5802442c 0x2>;
 		offset = <0x10>;
@@ -288,6 +292,7 @@
 		/* RCC_PLL2DIVR[DIVR2], enable RCC_PLLCFGR[DIVR2EN] */
 		compatible = "st,stm32-pll-postdiv";
 		#clock-cells = <1>;
+		div-type = "linear";
 		enable-offset = <0x15>;
 		reg = <0x58024438 0x2>, <0x5802442c 0x2>;
 		offset = <0x18>;
@@ -316,6 +321,7 @@
 		/* RCC_PLL3DIVR[DIVP3], enable RCC_PLLCFGR[DIVP3EN] */
 		compatible = "st,stm32-pll-postdiv";
 		#clock-cells = <1>;
+		div-type = "linear";
 		enable-offset = <0x16>;
 		reg = <0x58024440 0x2>, <0x5802442c 0x2>;
 		offset = <0x9>;
@@ -327,6 +333,7 @@
 		/* RCC_PLL3DIVR[DIVQ3], enable RCC_PLLCFGR[DIVQ3EN] */
 		compatible = "st,stm32-pll-postdiv";
 		#clock-cells = <1>;
+		div-type = "linear";
 		enable-offset = <0x17>;
 		reg = <0x58024440 0x2>, <0x5802442c 0x2>;
 		offset = <0x10>;
@@ -338,6 +345,7 @@
 		/* RCC_PLL3DIVR[DIVR3], enable RCC_PLLCFGR[DIVR3EN] */
 		compatible = "st,stm32-pll-postdiv";
 		#clock-cells = <1>;
+		div-type = "linear";
 		enable-offset = <0x18>;
 		reg = <0x58024440 0x2>, <0x5802442c 0x2>;
 		offset = <0x18>;

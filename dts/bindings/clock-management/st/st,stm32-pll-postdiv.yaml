@@ -45,10 +45,16 @@ properties:
     description: |
       Clock node for the parent clock.
 
-  st,no-odd:
-    type: boolean
+  div-type:
+    type: string
+    required: true
+    enum:
+      - "linear"
+      - "no-odd"
+      - "l4"
+      - "l4p"
     description: |
-      When set, the post-divider does not support odd division factors
+      When set, specifies the type of post-divider
 
   "#clock-cells":
     const: 1
