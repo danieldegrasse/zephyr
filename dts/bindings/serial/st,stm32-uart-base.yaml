@@ -11,6 +11,7 @@ include:
   - name: pinctrl-device.yaml
   - name: reset-device.yaml
   - name: uart-controller-pin-inversion.yaml
+  - name: clock-device.yaml
 
 properties:
   reg:

@@ -110,10 +110,19 @@
 	status = "okay";
 };
 
+&usart3_clock {
+	usart3_default: usart3-default {
+		compatible = "clock-state";
+		clocks = <&d1cpre 1 &hpre 2 &d2ppre1 2 &usart234578sel 0 &usart3en 1>;
+	};
+};
+
 &usart3 {
 	pinctrl-0 = <&usart3_tx_pd8 &usart3_rx_pd9>;
 	pinctrl-names = "default";
 	current-speed = <115200>;
+	clock-request-0 = <&usart3_default>;
+	clock-request-names = "default";
 	status = "okay";
 };
 

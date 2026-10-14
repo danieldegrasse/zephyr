@@ -1,0 +1,12 @@
+# Copyright 2026 Analog Devices Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_STM32_CLOCK_SOURCE clock_source_stm32.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_STM32_OSC osc_stm32.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_STM32_PLL_POSTDIV pll_postdiv_stm32.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_STM32_CLOCK_DIV clock_div_stm32.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_STM32H7_PLL pll_stm32h7.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_STM32L4_PLL pll_stm32l4.c)
+
+# Header
+add_clock_management_header_ifdef(CONFIG_CLOCK_MANAGEMENT_STM32 stm32_clocks.h)
