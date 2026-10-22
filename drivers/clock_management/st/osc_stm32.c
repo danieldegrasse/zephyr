@@ -48,7 +48,13 @@ static int stm32_osc_configure(const struct clk *clk_hw, const void *data)
 	const struct stm32_osc_config *config = clk_hw->hw_data;
 	uint32_t cfg = (uint32_t)data;
 	int ret;
+	bool bypass = cfg & BIT(ST_STM32_OSC_BYPASS_SHIFT);
 
+	if (bypass == ((bool)sys_test_bit(config->reg, config->bypass_offset)) &&
+	    (cfg & BIT(0)) == ((bool)sys_test_bit(config->reg, config->enable_offset))) {
+		/* No need to reconfigure */
+		return 0;
+	}
 	/* Check if children can accept this clock gating */
 	ret = clock_children_check_rate(clk_hw, 0);
 	if (ret != 0) {
