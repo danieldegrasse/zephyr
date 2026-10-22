@@ -89,6 +89,10 @@
 	status = "okay";
 };
 
+&hse {
+	frequency = <DT_FREQ_M(8)>;
+};
+
 &clk_lse {
 	status = "okay";
 };
@@ -128,24 +132,51 @@
 	power-supply = "ldo";
 };
 
+&lpuart1_clock {
+	lpuart1_default: lpuart1-default {
+		compatible = "clock-state";
+		clocks = <&d3ppre 2 &lpuart1sel 0 &lpuart1en 1>;
+	};
+};
+
 &lpuart1 {
 	pinctrl-0 = <&lpuart1_tx_pb6 &lpuart1_rx_pb7>;
 	pinctrl-names = "default";
 	current-speed = <115200>;
+	clock-request-0 = <&lpuart1_default>;
+	clock-request-names = "default";
 	status = "okay";
+};
+
+&usart3_clock {
+	usart3_default: usart3-default {
+		compatible = "clock-state";
+		clocks = <&hse 1 1 &d1cpre 1 &hpre 2 &d2ppre1 2 &usart234578sel 0 &usart3en 1>;
+	};
 };
 
 &usart3 {
 	pinctrl-0 = <&usart3_tx_pd8 &usart3_rx_pd9>;
 	pinctrl-names = "default";
 	current-speed = <115200>;
+	clock-request-0 = <&usart3_default>;
+	clock-request-names = "default";
 	status = "okay";
+};
+
+&usart2_clock {
+	usart2_default: usart2-default {
+		compatible = "clock-state";
+		clocks = <&usart2en 1>;
+	};
 };
 
 &usart2 {
 	pinctrl-0 = <&usart2_tx_pd5 &usart2_rx_pd6>;
 	pinctrl-names = "default";
 	current-speed = <115200>;
+	clock-request-0 = <&usart2_default>;
+	clock-request-names = "default";
 	status = "okay";
 };
 
