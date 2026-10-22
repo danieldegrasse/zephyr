@@ -1,0 +1,1433 @@
+/*
+ * Copyright (c) 2026 Analog Devices Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Clock tree for the STMicroelectronics STM32H723/733 (RM0468).
+ *
+ * Modeled on the NXP LPC55S6x clock devicetree: every configurable element of
+ * the RCC is described as a node, and the 'reg' property of each node points at
+ * the register (RCC base 0x5802_4400) used to configure it. Where a node
+ * produces an observable output that a consumer can use, a "clock-output" child
+ * node is added.
+ *
+ * Per-peripheral clock enables (e.g. UART8EN) are modeled as "clock-gate"
+ * children of their kernel clock mux, each with its own "clock-output" child.
+ *
+ * RCC register offsets used below (relative to 0x58024400):
+ *   RCC_CR          0x000   RCC_HSICFGR     0x004   RCC_CRRCR       0x008
+ *   RCC_CFGR        0x010   RCC_D1CFGR      0x018   RCC_D2CFGR      0x01c
+ *   RCC_D3CFGR      0x020   RCC_PLLCKSELR   0x028   RCC_PLLCFGR     0x02c
+ *   RCC_PLL1DIVR    0x030   RCC_PLL1FRACR   0x034   RCC_PLL2DIVR    0x038
+ *   RCC_PLL2FRACR   0x03c   RCC_PLL3DIVR    0x040   RCC_PLL3FRACR   0x044
+ *   RCC_D1CCIPR     0x04c   RCC_D2CCIP1R    0x050   RCC_D2CCIP2R    0x054
+ *   RCC_D3CCIPR     0x058   RCC_BDCR        0x070   RCC_CSR         0x074
+ *   RCC_AHB3ENR     0x0D4   RCC_AHB1ENR     0x0D8   RCC_AHB2ENR     0x0DC
+ *   RCC_AHB4ENR     0x0E0   RCC_APB3ENR     0x0E4   RCC_APB1LENR    0x0E8
+ *   RCC_APB1HENR    0x0EC   RCC_APB2ENR     0x0F0   RCC_APB4ENR     0x0F4
+ */
+
+&rcc {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	/* ----------------------------------------------------------------- */
+	/* Root clock sources (oscillators)                                  */
+	/* ----------------------------------------------------------------- */
+
+	no_clock: no-clock {
+		/* Dummy node - indicates no clock source was selected */
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <0>;
+	};
+
+	hsi: hsi@58024400 {
+		/* 64 MHz high-speed internal RC oscillator (with predivider) */
+		compatible = "st,stm32-clock-source";
+		#clock-cells = <1>;
+		/* RCC_CR[HSION] */
+		reg = <0x58024400 0x1>;
+		offset = <0x0>;
+		ready-offset = <0x2>;
+		frequency = <64000000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+	};
+
+	csi: csi@58024400 {
+		/* ~4 MHz low-power internal RC oscillator */
+		compatible = "st,stm32-clock-source";
+		#clock-cells = <1>;
+		/* RCC_CR[CSION] */
+		reg = <0x58024400 0x1>;
+		offset = <0x7>;
+		ready-offset = <0x8>;
+		frequency = <4000000>;
+	};
+
+	hsi48: hsi48@58024400 {
+		/* 48 MHz internal RC oscillator (USB/CRS) */
+		compatible = "st,stm32-clock-source";
+		#clock-cells = <1>;
+		/* RCC_CR[HSI48ON] */
+		reg = <0x58024400 0x1>;
+		offset = <0xc>;
+		ready-offset = <0xd>;
+		frequency = <48000000>;
+	};
+
+	hse: hse@58024400 {
+		/* External high-speed oscillator (crystal or bypass) */
+		compatible = "st,stm32-osc";
+		#clock-cells = <2>;
+		/* RCC_CR[HSEON] */
+		reg = <0x58024400 0x1>;
+		offset = <0x10>;
+		ready-offset = <0x11>;
+		bypass-offset = <0x12>;
+		/* External clock source (default 25 MHz) */
+		frequency = <25000000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+	};
+
+	lsi: lsi@58024474 {
+		/* ~32 kHz low-speed internal RC oscillator */
+		compatible = "st,stm32-clock-source";
+		#clock-cells = <1>;
+		/* RCC_CSR[LSION] */
+		reg = <0x58024474 0x1>;
+		offset = <0x0>;
+		ready-offset = <0x1>;
+		frequency = <32000>;
+	};
+
+	lse: lse@58024470 {
+		/* 32.768 kHz external low-speed oscillator (backup domain) */
+		compatible = "st,stm32-osc";
+		#clock-cells = <2>;
+		/* RCC_BDCR[LSEON] */
+		reg = <0x58024470 0x1>;
+		offset = <0x0>;
+		ready-offset = <0x1>;
+		bypass-offset = <0x2>;
+		/* External clock source (default 32768 Hz) */
+		frequency = <32768>;
+	};
+
+	i2s_ckin: i2s-ckin {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		/* External clock source taken from a pin */
+		clock-frequency = <0>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* HSI output predivider (RCC_CR[HSIDIV])                            */
+	/* ----------------------------------------------------------------- */
+
+	hsidiv: hsidiv@58024400 {
+		/* Selects HSI output of 64/32/16/8 MHz (1,2,4,8) */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		/* RCC_CR[HSIDIV] */
+		reg = <0x58024400 0x1>;
+		offset = <0x3>;
+		width = <0x2>;
+		div-type = "pow2";
+		input = <&hsi>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* PLL reference clock source selection and prescalers               */
+	/* ----------------------------------------------------------------- */
+
+	pllckselr: pllckselr@58024428 {
+		/* RCC_PLLCKSELR[PLLSRC] - common source for all three PLLs */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024428 0x2>;
+		offset = <0x0>;
+		input-sources = <&hsidiv &csi &hse &no_clock>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+	};
+
+	pll1_divm: pll1-divm@58024428 {
+		/* RCC_PLLCKSELR[DIVM1] - PLL1 reference prescaler (ref1_ck) */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		div-type = "linear";
+		reg = <0x58024428 0x2>;
+		offset = <0x4>;
+		width = <0x6>;
+		input = <&pllckselr>;
+	};
+
+	pll2_divm: pll2-divm@58024428 {
+		/* RCC_PLLCKSELR[DIVM2] - PLL2 reference prescaler (ref2_ck) */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		div-type = "linear";
+		reg = <0x58024428 0x3>;
+		offset = <0xc>;
+		width = <0x6>;
+		input = <&pllckselr>;
+	};
+
+	pll3_divm: pll3-divm@58024428 {
+		/* RCC_PLLCKSELR[DIVM3] - PLL3 reference prescaler (ref3_ck) */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		div-type = "linear";
+		reg = <0x58024428 0x4>;
+		offset = <0x14>;
+		width = <0x6>;
+		input = <&pllckselr>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* PLL1 (main PLL) - VCO and P/Q/R post-dividers                     */
+	/* ----------------------------------------------------------------- */
+
+	pll1: pll1@58024430 {
+		/*
+		 * RCC_PLL1DIVR[DIVN1] fractional VCO, plus RCC_PLL1FRACR and the
+		 * control/range bits in RCC_PLLCFGR and RCC_CR.
+		 * #clock-cells encodes DIVN, FRACN, RGE, VCOSEL, and the enable.
+		 */
+		compatible = "st,stm32h7-pll";
+		reg = <0x58024430 0x8>, <0x58024400 0x8>;
+		#clock-cells = <5>;
+		/* RCC_CR[PLL1ON] */
+		enable-bit = <0x18>;
+		/* RCC_PLLCFGR[PLL2FRACEN] */
+		fracen-bit = <0x0>;
+		input = <&pll1_divm>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+	};
+
+	pll1_p: pll1-p@58024430 {
+		/* RCC_PLL1DIVR[DIVP1], enable RCC_PLLCFGR[DIVP1EN] */
+		compatible = "st,stm32-pll-postdiv";
+		#clock-cells = <1>;
+		div-type = "no-odd";
+		enable-offset = <0x10>;
+		reg = <0x58024430 0x2>, <0x5802442c 0x2>;
+		offset = <0x9>;
+		width = <0x7>;
+		input = <&pll1>;
+	};
+
+	pll1_q: pll1-q@58024430 {
+		/* RCC_PLL1DIVR[DIVQ1], enable RCC_PLLCFGR[DIVQ1EN] */
+		compatible = "st,stm32-pll-postdiv";
+		#clock-cells = <1>;
+		div-type = "linear";
+		enable-offset = <0x11>;
+		reg = <0x58024430 0x2>, <0x5802442c 0x2>;
+		offset = <0x10>;
+		width = <0x7>;
+		input = <&pll1>;
+	};
+
+	pll1_r: pll1-r@58024430 {
+		/* RCC_PLL1DIVR[DIVR1], enable RCC_PLLCFGR[DIVR1EN] */
+		compatible = "st,stm32-pll-postdiv";
+		#clock-cells = <1>;
+		div-type = "linear";
+		enable-offset = <0x12>;
+		reg = <0x58024430 0x2>, <0x5802442c 0x2>;
+		offset = <0x18>;
+		width = <0x7>;
+		input = <&pll1>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* PLL2 - VCO and P/Q/R post-dividers                                */
+	/* ----------------------------------------------------------------- */
+
+	pll2_clk: pll2@58024438 {
+		compatible = "st,stm32h7-pll";
+		reg = <0x58024438 0x8>, <0x58024400 0x8>;
+		#clock-cells = <5>;
+		/* RCC_CR[PLL2ON] */
+		enable-bit = <0x1a>;
+		/* RCC_PLLCFGR[PLL2FRACEN] */
+		fracen-bit = <0x4>;
+		input = <&pll2_divm>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+	};
+
+	pll2_p: pll2-p@58024438 {
+		/* RCC_PLL2DIVR[DIVP2], enable RCC_PLLCFGR[DIVP2EN] */
+		compatible = "st,stm32-pll-postdiv";
+		#clock-cells = <1>;
+		div-type = "linear";
+		enable-offset = <0x13>;
+		reg = <0x58024438 0x2>, <0x5802442c 0x2>;
+		offset = <0x9>;
+		width = <0x7>;
+		input = <&pll2_clk>;
+	};
+
+	pll2_q: pll2-q@58024438 {
+		/* RCC_PLL2DIVR[DIVQ2], enable RCC_PLLCFGR[DIVQ2EN] */
+		compatible = "st,stm32-pll-postdiv";
+		#clock-cells = <1>;
+		div-type = "linear";
+		enable-offset = <0x14>;
+		reg = <0x58024438 0x2>, <0x5802442c 0x2>;
+		offset = <0x10>;
+		width = <0x7>;
+		input = <&pll2_clk>;
+	};
+
+	pll2_r: pll2-r@58024438 {
+		/* RCC_PLL2DIVR[DIVR2], enable RCC_PLLCFGR[DIVR2EN] */
+		compatible = "st,stm32-pll-postdiv";
+		#clock-cells = <1>;
+		div-type = "linear";
+		enable-offset = <0x15>;
+		reg = <0x58024438 0x2>, <0x5802442c 0x2>;
+		offset = <0x18>;
+		width = <0x7>;
+		input = <&pll2_clk>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* PLL3 - VCO and P/Q/R post-dividers                                */
+	/* ----------------------------------------------------------------- */
+
+	pll3_clk: pll3@58024440 {
+		compatible = "st,stm32h7-pll";
+		reg = <0x58024440 0x8>, <0x58024400 0x8>;
+		#clock-cells = <5>;
+		/* RCC_CR[PLL3ON] */
+		enable-bit = <0x1c>;
+		/* RCC_PLLCFGR[PLL3FRACEN] */
+		fracen-bit = <0x8>;
+		input = <&pll3_divm>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+	};
+
+	pll3_p: pll3-p@58024440 {
+		/* RCC_PLL3DIVR[DIVP3], enable RCC_PLLCFGR[DIVP3EN] */
+		compatible = "st,stm32-pll-postdiv";
+		#clock-cells = <1>;
+		div-type = "linear";
+		enable-offset = <0x16>;
+		reg = <0x58024440 0x2>, <0x5802442c 0x2>;
+		offset = <0x9>;
+		width = <0x7>;
+		input = <&pll3_clk>;
+	};
+
+	pll3_q: pll3-q@58024440 {
+		/* RCC_PLL3DIVR[DIVQ3], enable RCC_PLLCFGR[DIVQ3EN] */
+		compatible = "st,stm32-pll-postdiv";
+		#clock-cells = <1>;
+		div-type = "linear";
+		enable-offset = <0x17>;
+		reg = <0x58024440 0x2>, <0x5802442c 0x2>;
+		offset = <0x10>;
+		width = <0x7>;
+		input = <&pll3_clk>;
+	};
+
+	pll3_r: pll3-r@58024440 {
+		/* RCC_PLL3DIVR[DIVR3], enable RCC_PLLCFGR[DIVR3EN] */
+		compatible = "st,stm32-pll-postdiv";
+		#clock-cells = <1>;
+		div-type = "linear";
+		enable-offset = <0x18>;
+		reg = <0x58024440 0x2>, <0x5802442c 0x2>;
+		offset = <0x18>;
+		width = <0x7>;
+		input = <&pll3_clk>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* System clock (sys_ck) and core / bus matrix clock generation      */
+	/* ----------------------------------------------------------------- */
+
+	sys_ck: sys-ck@58024410 {
+		/* RCC_CFGR[SW] - system clock source mux */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024410 0x3>;
+		offset = <0x0>;
+		input-sources = <&hsidiv &csi &hse &pll1_p>;
+
+		sys_clock: sys-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	d1cpre: d1cpre@58024418 {
+		/* RCC_D1CFGR[D1CPRE] - CPU / D1 core prescaler (sys_d1cpre_ck) */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		reg = <0x58024418 0x2>;
+		offset = <0x8>;
+		width = <0x4>;
+		div-type = "pow2";
+		input = <&sys_ck>;
+
+		cpu_clock: cpu-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	hpre: hpre@58024418 {
+		/* RCC_D1CFGR[HPRE] - AHB prescaler (rcc_hclk3 / rcc_aclk) */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		reg = <0x58024418 0x1>;
+		offset = <0x0>;
+		width = <0x4>;
+		div-type = "pow2";
+		input = <&d1cpre>;
+
+		hclk_clock: hclk-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	d1ppre: d1ppre@58024418 {
+		/* RCC_D1CFGR[D1PPRE] - APB3 prescaler (rcc_pclk3) */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		reg = <0x58024418 0x1>;
+		offset = <0x4>;
+		width = <0x3>;
+		div-type = "pow2";
+		input = <&hpre>;
+
+		pclk3_clock: pclk3-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	d2ppre1: d2ppre1@5802441c {
+		/* RCC_D2CFGR[D2PPRE1] - APB1 prescaler (rcc_pclk1) */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		reg = <0x5802441c 0x1>;
+		offset = <0x4>;
+		width = <0x3>;
+		div-type = "pow2";
+		input = <&hpre>;
+
+		pclk1_clock: pclk1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	d2ppre2: d2ppre2@5802441c {
+		/* RCC_D2CFGR[D2PPRE2] - APB2 prescaler (rcc_pclk2) */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		reg = <0x5802441c 0x2>;
+		offset = <0x8>;
+		width = <0x3>;
+		div-type = "pow2";
+		input = <&hpre>;
+
+		pclk2_clock: pclk2-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	d3ppre: d3ppre@58024420 {
+		/* RCC_D3CFGR[D3PPRE] - APB4 prescaler (rcc_pclk4) */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		reg = <0x58024420 0x1>;
+		offset = <0x4>;
+		width = <0x3>;
+		div-type = "pow2";
+		input = <&hpre>;
+
+		pclk4_clock: pclk4-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* per_ck (peripheral kernel clock) - RCC_D1CCIPR[CKPERSEL]          */
+	/* ----------------------------------------------------------------- */
+
+	per_ck: per-ck@5802444c {
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		/* RCC_D1CCIPR[CKPERSEL] */
+		reg = <0x5802444c 0x2>;
+		offset = <0x1c>;
+		input-sources = <&hsidiv &csi &hse &no_clock>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* RTC clock - RCC_CFGR[RTCPRE] divider + RCC_BDCR[RTCSEL] mux       */
+	/* ----------------------------------------------------------------- */
+
+	rtcpre: rtcpre@58024410 {
+		/* RCC_CFGR[RTCPRE] - HSE division factor for RTC clock */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		reg = <0x58024410 0x2>;
+		div-type = "rtcpre";
+		offset = <0x8>;
+		width = <0x6>;
+		input = <&hse>;
+	};
+
+	rtcsel: rtcsel@58024470 {
+		/* RCC_BDCR[RTCSEL] - RTC clock source mux */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024470 0x2>;
+		offset = <0x8>;
+		input-sources = <&no_clock &lse &lsi &rtcpre>;
+
+		rtc_clock: rtc-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* Micro-controller clock outputs (MCO1 / MCO2) - RCC_CFGR           */
+	/* ----------------------------------------------------------------- */
+
+	mco1sel: mco1sel@58024410 {
+		/* RCC_CFGR[MCO1] - MCO1 source mux */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024410 0x3>;
+		offset = <0x16>;
+		input-sources = <&hsidiv &lse &hse &pll1_q &hsi48>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+	};
+
+	mco1_clk: mco1@58024410 {
+		/* RCC_CFGR[MCO1PRE] - MCO1 prescaler */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		div-type = "linear";
+		reg = <0x58024410 0x3>;
+		offset = <0x12>;
+		width = <0x4>;
+		input = <&mco1sel>;
+
+		mco1_clock: mco1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	mco2sel: mco2sel@58024410 {
+		/* RCC_CFGR[MCO2] - MCO2 source mux */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024410 0x3>;
+		offset = <0x1d>;
+		input-sources = <&sys_ck &pll2_p &hse &pll1_p &csi &lsi>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+	};
+
+	mco2_clk: mco2@58024410 {
+		/* RCC_CFGR[MCO2PRE] - MCO2 prescaler */
+		compatible = "st,stm32-clock-div";
+		#clock-cells = <1>;
+		reg = <0x58024410 0x4>;
+		div-type = "linear";
+		offset = <0x19>;
+		width = <0x4>;
+		input = <&mco2sel>;
+
+		mco2_clock: mco2-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* Domain 1 kernel clock muxes (RCC_D1CCIPR @ 0x04c)                 */
+	/* ----------------------------------------------------------------- */
+
+	fmcsel: fmcsel@5802444c {
+		/* RCC_D1CCIPR[FMCSEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x5802444c 0x2>;
+		offset = <0x0>;
+		input-sources = <&hpre &pll1_q &pll2_r &per_ck>;
+	};
+
+	octospisel: octospisel@5802444c {
+		/* RCC_D1CCIPR[OCTOSPISEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x5802444c 0x2>;
+		offset = <0x4>;
+		input-sources = <&hpre &pll1_q &pll2_r &per_ck>;
+	};
+
+	sdmmcsel: sdmmcsel@5802444c {
+		/* RCC_D1CCIPR[SDMMCSEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x5802444c 0x1>;
+		offset = <0x10>;
+		input-sources = <&pll1_q &pll2_r>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* Domain 2 kernel clock muxes (RCC_D2CCIP1R @ 0x050)                */
+	/* ----------------------------------------------------------------- */
+
+	sai1sel: sai1sel@58024450 {
+		/* RCC_D2CCIP1R[SAI1SEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024450 0x3>;
+		offset = <0x0>;
+		input-sources = <&pll1_q &pll2_p &pll3_p &i2s_ckin &per_ck>;
+	};
+
+	spi123sel: spi123sel@58024450 {
+		/* RCC_D2CCIP1R[SPI123SEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024450 0x3>;
+		offset = <0xc>;
+		input-sources = <&pll1_q &pll2_p &pll3_p &i2s_ckin &per_ck>;
+	};
+
+	spi45sel: spi45sel@58024450 {
+		/* RCC_D2CCIP1R[SPI45SEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024450 0x3>;
+		offset = <0x10>;
+		input-sources = <&d2ppre2 &pll2_q &pll3_q &hsidiv &csi &hse>;
+	};
+
+	spdifrxsel: spdifrxsel@58024450 {
+		/* RCC_D2CCIP1R[SPDIFRXSEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024450 0x2>;
+		offset = <0x14>;
+		input-sources = <&pll1_q &pll2_r &pll3_r &hsidiv>;
+	};
+
+	dfsdm1sel: dfsdm1sel@58024450 {
+		/* RCC_D2CCIP1R[DFSDM1SEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024450 0x1>;
+		offset = <0x18>;
+		input-sources = <&d2ppre2 &sys_ck>;
+	};
+
+	fdcansel: fdcansel@58024450 {
+		/* RCC_D2CCIP1R[FDCANSEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024450 0x2>;
+		offset = <0x1c>;
+		input-sources = <&hse &pll1_q &pll2_q &no_clock>;
+	};
+
+	swpmisel: swpmisel@58024450 {
+		/* RCC_D2CCIP1R[SWPMISEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024450 0x1>;
+		offset = <0x1f>;
+		input-sources = <&d2ppre1 &hsidiv>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* Domain 2 kernel clock muxes (RCC_D2CCIP2R @ 0x054)                */
+	/* ----------------------------------------------------------------- */
+
+	usart234578sel: usart234578sel@58024454 {
+		/* RCC_D2CCIP2R[USART234578SEL] (APB1 USART2/3, UART4/5/7/8) */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024454 0x3>;
+		offset = <0x0>;
+		input-sources = <&d2ppre1 &pll2_q &pll3_q &hsidiv &csi &lse>;
+	};
+
+	usart16910sel: usart16910sel@58024454 {
+		/* RCC_D2CCIP2R[USART16910SEL] (APB2 USART1/6/9/10) */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024454 0x3>;
+		offset = <0x3>;
+		input-sources = <&d2ppre2 &pll2_q &pll3_q &hsidiv &csi &lse>;
+	};
+
+	rngsel: rngsel@58024454 {
+		/* RCC_D2CCIP2R[RNGSEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024454 0x2>;
+		offset = <0x8>;
+		input-sources = <&hsi48 &pll1_q &lse &lsi>;
+	};
+
+	i2c1235sel: i2c1235sel@58024454 {
+		/* RCC_D2CCIP2R[I2C1235SEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024454 0x2>;
+		offset = <0xc>;
+		input-sources = <&d2ppre1 &pll3_r &hsidiv &csi>;
+	};
+
+	usbsel: usbsel@58024454 {
+		/* RCC_D2CCIP2R[USBSEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024454 0x2>;
+		offset = <0x14>;
+		input-sources = <&no_clock &pll1_q &pll3_q &hsi48>;
+	};
+
+	cecsel: cecsel@58024454 {
+		/* RCC_D2CCIP2R[CECSEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024454 0x2>;
+		offset = <0x16>;
+		input-sources = <&lse &lsi &csi &no_clock>;
+	};
+
+	lptim1sel: lptim1sel@58024454 {
+		/* RCC_D2CCIP2R[LPTIM1SEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024454 0x3>;
+		offset = <0x1c>;
+		input-sources = <&d2ppre1 &pll2_p &pll3_r &lse &lsi &per_ck>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* Domain 3 kernel clock muxes (RCC_D3CCIPR @ 0x058)                 */
+	/* ----------------------------------------------------------------- */
+
+	lpuart1sel: lpuart1sel@58024458 {
+		/* RCC_D3CCIPR[LPUART1SEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024458 0x3>;
+		offset = <0x0>;
+		input-sources = <&d3ppre &pll2_q &pll3_q &hsidiv &csi &lse>;
+	};
+
+	i2c4sel: i2c4sel@58024458 {
+		/* RCC_D3CCIPR[I2C4SEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024458 0x2>;
+		offset = <0x8>;
+		input-sources = <&d3ppre &pll3_r &hsidiv &csi>;
+	};
+
+	lptim2sel: lptim2sel@58024458 {
+		/* RCC_D3CCIPR[LPTIM2SEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024458 0x3>;
+		offset = <0xa>;
+		input-sources = <&d3ppre &pll2_p &pll3_r &lse &lsi &per_ck>;
+	};
+
+	lptim345sel: lptim345sel@58024458 {
+		/* RCC_D3CCIPR[LPTIM345SEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024458 0x3>;
+		offset = <0xd>;
+		input-sources = <&d3ppre &pll2_p &pll3_r &lse &lsi &per_ck>;
+	};
+
+	adcsel: adcsel@58024458 {
+		/* RCC_D3CCIPR[ADCSEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024458 0x2>;
+		offset = <0x10>;
+		input-sources = <&pll2_p &pll3_r &per_ck &no_clock>;
+	};
+
+	sai4asel: sai4asel@58024458 {
+		/* RCC_D3CCIPR[SAI4ASEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024458 0x3>;
+		offset = <0x15>;
+		input-sources = <&pll1_q &pll2_p &pll3_p &i2s_ckin &per_ck
+				 &spdifrxsel>;
+	};
+
+	sai4bsel: sai4bsel@58024458 {
+		/* RCC_D3CCIPR[SAI4BSEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024458 0x3>;
+		offset = <0x18>;
+		input-sources = <&pll1_q &pll2_p &pll3_p &i2s_ckin &per_ck
+				 &spdifrxsel>;
+	};
+
+	spi6sel: spi6sel@58024458 {
+		/* RCC_D3CCIPR[SPI6SEL] */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x58024458 0x3>;
+		offset = <0x1c>;
+		input-sources = <&d3ppre &pll2_q &pll3_q &hsidiv &csi &hse
+				 &i2s_ckin>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* Clock gates - moved to RCC top level with input references        */
+	/* ----------------------------------------------------------------- */
+
+	fmcen: fmc-en@580244d4 {
+		/* RCC_AHB3ENR[FMCEN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244d4 0x1>;
+		offset = <0xc>;
+		input = <&fmcsel>;
+
+		fmc_clock: fmc-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	octospi1en: octospi1-en@580244d4 {
+		/* RCC_AHB3ENR[OCTOSPI1EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244d4 0x1>;
+		offset = <0xe>;
+		input = <&octospisel>;
+
+		octospi1_clock: octospi1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	octospi2en: octospi2-en@580244d4 {
+		/* RCC_AHB3ENR[OCTOSPI2EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244d4 0x1>;
+		offset = <0x13>;
+		input = <&octospisel>;
+
+		octospi2_clock: octospi2-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	sdmmc1en: sdmmc1-en@580244d4 {
+		/* RCC_AHB3ENR[SDMMC1EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244d4 0x1>;
+		offset = <0x10>;
+		input = <&sdmmcsel>;
+
+		sdmmc1_clock: sdmmc1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	sdmmc2en: sdmmc2-en@580244dc {
+		/* RCC_AHB2ENR[SDMMC2EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244dc 0x1>;
+		offset = <0x9>;
+		input = <&sdmmcsel>;
+
+		sdmmc2_clock: sdmmc2-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	sai1en: sai1-en@580244f0 {
+		/* RCC_APB2ENR[SAI1EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f0 0x1>;
+		offset = <0x16>;
+		input = <&sai1sel>;
+
+		sai1_clock: sai1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	spi1en: spi1-en@580244f0 {
+		/* RCC_APB2ENR[SPI1EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f0 0x1>;
+		offset = <0xc>;
+		input = <&spi123sel>;
+
+		spi1_clock: spi1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	spi2en: spi2-en@580244e8 {
+		/* RCC_APB1LENR[SPI2EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0xe>;
+		input = <&spi123sel>;
+
+		spi2_clock: spi2-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	spi3en: spi3-en@580244e8 {
+		/* RCC_APB1LENR[SPI3EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0xf>;
+		input = <&spi123sel>;
+
+		spi3_clock: spi3-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	spi4en: spi4-en@580244f0 {
+		/* RCC_APB2ENR[SPI4EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f0 0x1>;
+		offset = <0xd>;
+		input = <&spi45sel>;
+
+		spi4_clock: spi4-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	spi5en: spi5-en@580244f0 {
+		/* RCC_APB2ENR[SPI5EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f0 0x1>;
+		offset = <0x14>;
+		input = <&spi45sel>;
+
+		spi5_clock: spi5-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	spdifrxen: spdifrx-en@580244e8 {
+		/* RCC_APB1LENR[SPDIFRXEN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x10>;
+		input = <&spdifrxsel>;
+
+		spdifrx_clock: spdifrx-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	dfsdm1en: dfsdm1-en@580244f0 {
+		/* RCC_APB2ENR[DFSDM1EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f0 0x1>;
+		offset = <0x1e>;
+		input = <&dfsdm1sel>;
+
+		dfsdm1_clock: dfsdm1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	fdcanen: fdcan-en@580244ec {
+		/* RCC_APB1HENR[FDCANEN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244ec 0x1>;
+		offset = <0x8>;
+		input = <&fdcansel>;
+
+		fdcan_clock: fdcan-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	swpmien: swpmi-en@580244ec {
+		/* RCC_APB1HENR[SWPMIEN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244ec 0x1>;
+		offset = <0x2>;
+		input = <&swpmisel>;
+
+		swpmi_clock: swpmi-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	usart2en: usart2-en@580244e8 {
+		/* RCC_APB1LENR[USART2EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x11>;
+		input = <&usart234578sel>;
+
+		usart2_clock: usart2-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	usart3en: usart3-en@580244e8 {
+		/* RCC_APB1LENR[USART3EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x12>;
+		input = <&usart234578sel>;
+
+		usart3_clock: usart3-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	uart4en: uart4-en@580244e8 {
+		/* RCC_APB1LENR[UART4EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x13>;
+		input = <&usart234578sel>;
+
+		uart4_clock: uart4-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	uart5en: uart5-en@580244e8 {
+		/* RCC_APB1LENR[UART5EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x14>;
+		input = <&usart234578sel>;
+
+		uart5_clock: uart5-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	uart7en: uart7-en@580244e8 {
+		/* RCC_APB1LENR[UART7EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x1e>;
+		input = <&usart234578sel>;
+
+		uart7_clock: uart7-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	uart8en: uart8-en@580244e8 {
+		/* RCC_APB1LENR[UART8EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x1f>;
+		input = <&usart234578sel>;
+
+		uart8_clock: uart8-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	usart1en: usart1-en@580244f0 {
+		/* RCC_APB2ENR[USART1EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f0 0x1>;
+		offset = <0x4>;
+		input = <&usart16910sel>;
+
+		usart1_clock: usart1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	usart6en: usart6-en@580244f0 {
+		/* RCC_APB2ENR[USART6EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f0 0x1>;
+		offset = <0x5>;
+		input = <&usart16910sel>;
+
+		usart6_clock: usart6-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	uart9en: uart9-en@580244f0 {
+		/* RCC_APB2ENR[UART9EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f0 0x1>;
+		offset = <0x6>;
+		input = <&usart16910sel>;
+
+		uart9_clock: uart9-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	usart10en: usart10-en@580244f0 {
+		/* RCC_APB2ENR[USART10EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f0 0x1>;
+		offset = <0x7>;
+		input = <&usart16910sel>;
+
+		usart10_clock: usart10-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	rngen: rng-en@580244dc {
+		/* RCC_AHB2ENR[RNGEN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244dc 0x1>;
+		offset = <0x6>;
+		input = <&rngsel>;
+
+		rng_clock: rng-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	i2c1en: i2c1-en@580244e8 {
+		/* RCC_APB1LENR[I2C1EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x15>;
+		input = <&i2c1235sel>;
+
+		i2c1_clock: i2c1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	i2c2en: i2c2-en@580244e8 {
+		/* RCC_APB1LENR[I2C2EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x16>;
+		input = <&i2c1235sel>;
+
+		i2c2_clock: i2c2-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	i2c3en: i2c3-en@580244e8 {
+		/* RCC_APB1LENR[I2C3EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x17>;
+		input = <&i2c1235sel>;
+
+		i2c3_clock: i2c3-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	i2c5en: i2c5-en@580244e8 {
+		/* RCC_APB1LENR[I2C5EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x19>;
+		input = <&i2c1235sel>;
+
+		i2c5_clock: i2c5-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	usb1otghsen: usb1otghs-en@580244d8 {
+		/* RCC_AHB1ENR[USB1OTGHSEN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244d8 0x1>;
+		offset = <0x19>;
+		input = <&usbsel>;
+
+		usb1otghs_clock: usb1otghs-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	cecen: cec-en@580244e8 {
+		/* RCC_APB1LENR[CECEN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x1b>;
+		input = <&cecsel>;
+
+		cec_clock: cec-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	lptim1en: lptim1-en@580244e8 {
+		/* RCC_APB1LENR[LPTIM1EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e8 0x1>;
+		offset = <0x9>;
+		input = <&lptim1sel>;
+
+		lptim1_clock: lptim1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	lpuart1en: lpuart1-en@580244f4 {
+		/* RCC_APB4ENR[LPUART1EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f4 0x1>;
+		offset = <0x3>;
+		input = <&lpuart1sel>;
+
+		lpuart1_clock: lpuart1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	i2c4en: i2c4-en@580244f4 {
+		/* RCC_APB4ENR[I2C4EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f4 0x1>;
+		offset = <0x7>;
+		input = <&i2c4sel>;
+
+		i2c4_clock: i2c4-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	lptim2en: lptim2-en@580244f4 {
+		/* RCC_APB4ENR[LPTIM2EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f4 0x1>;
+		offset = <0x9>;
+		input = <&lptim2sel>;
+
+		lptim2_clock: lptim2-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	lptim3en: lptim3-en@580244f4 {
+		/* RCC_APB4ENR[LPTIM3EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f4 0x1>;
+		offset = <0xa>;
+		input = <&lptim345sel>;
+
+		lptim3_clock: lptim3-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	lptim4en: lptim4-en@580244f4 {
+		/* RCC_APB4ENR[LPTIM4EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f4 0x1>;
+		offset = <0xb>;
+		input = <&lptim345sel>;
+
+		lptim4_clock: lptim4-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	lptim5en: lptim5-en@580244f4 {
+		/* RCC_APB4ENR[LPTIM5EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f4 0x1>;
+		offset = <0xc>;
+		input = <&lptim345sel>;
+
+		lptim5_clock: lptim5-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	adc12en: adc12-en@580244d8 {
+		/* RCC_AHB1ENR[ADC12EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244d8 0x1>;
+		offset = <0x5>;
+		input = <&adcsel>;
+
+		adc12_clock: adc12-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	adc3en: adc3-en@580244e0 {
+		/* RCC_AHB4ENR[ADC3EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244e0 0x1>;
+		offset = <0x18>;
+		input = <&adcsel>;
+
+		adc3_clock: adc3-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	sai4en_a: sai4-en-a@580244f4 {
+		/* RCC_APB4ENR[SAI4EN] (sub-block A) */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f4 0x1>;
+		offset = <0x15>;
+		input = <&sai4asel>;
+
+		sai4a_clock: sai4a-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	sai4en_b: sai4-en-b@580244f4 {
+		/* RCC_APB4ENR[SAI4EN] (sub-block B) */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f4 0x1>;
+		offset = <0x15>;
+		input = <&sai4bsel>;
+
+		sai4b_clock: sai4b-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	spi6en: spi6-en@580244f4 {
+		/* RCC_APB4ENR[SPI6EN] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x580244f4 0x1>;
+		offset = <0x5>;
+		input = <&spi6sel>;
+
+		spi6_clock: spi6-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+};

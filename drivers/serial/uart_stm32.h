@@ -15,6 +15,7 @@
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/reset.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/drivers/clock_management.h>
 
 #include <stm32_ll_usart.h>
 
@@ -22,14 +23,20 @@
 struct uart_stm32_config {
 	/* USART instance */
 	USART_TypeDef *usart;
+#ifdef CONFIG_CLOCK_MANAGEMENT
+	const struct clock_management_data *clock_data;
+	clock_output_t clock_output;
+	clock_request_t clock_request;
+#else
 	/* clock device */
 	const struct device *clock;
-	/* Reset controller device configuration */
-	const struct reset_dt_spec reset;
 	/* clock subsystem driving this peripheral */
 	const struct stm32_pclken *pclken;
 	/* number of clock subsystems */
 	size_t pclk_len;
+#endif
+	/* Reset controller device configuration */
+	const struct reset_dt_spec reset;
 	/* switch to enable single wire / half duplex feature */
 	bool single_wire;
 	/* enable tx/rx pin swap */
