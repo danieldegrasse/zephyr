@@ -91,6 +91,15 @@ config CLOCK_MANAGEMENT_NXP_KINETIS_MCG_PLL
 	help
 	  NXP Kinetis MCG phase locked loop (PLL) driver
 
+config CLOCK_MANAGEMENT_NXP_KINETIS_SIM_FRAC_DIV
+	bool "NXP Kinetis SIM fractional divider driver"
+	default y
+	depends on DT_HAS_NXP_KINETIS_SIM_FRAC_DIV_ENABLED
+	select CLOCK_MANAGEMENT_NXP_KINETIS
+	help
+	  NXP Kinetis SIM fractional clock divider driver, such as the USB
+	  clock divider in SIM_CLKDIV2
+
 if CLOCK_MANAGEMENT_NXP_KINETIS
 
 config NXP_KINETIS_CLOCK_TIMEOUT

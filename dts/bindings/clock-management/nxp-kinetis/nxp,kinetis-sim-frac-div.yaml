@@ -1,0 +1,36 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Kinetis SIM fractional clock divider, such as SIM_CLKDIV2[USBFRAC,
+  USBDIV]. The fraction bit is bit 0 of the register, and the divider is
+  bits 3:1. Output rate is input * multiplier / divider.
+
+  Accepts two specifiers:
+    - multiplier: 1 or 2 (FRAC + 1)
+    - divider: 1 to 8 (DIV + 1)
+  The multiplier may not exceed the divider, so the output rate never
+  exceeds the input rate.
+
+compatible: "nxp,kinetis-sim-frac-div"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Address and size of the SIM clock divider register.
+
+  input:
+    type: phandle
+    required: true
+    description: |
+      phandle to upstream clock that this divider divides.
+
+  "#clock-cells":
+    const: 2
+
+clock-cells:
+  - multiplier
+  - divider
