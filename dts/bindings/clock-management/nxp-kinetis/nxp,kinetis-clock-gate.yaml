@@ -1,0 +1,45 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Kinetis clock gate within an 8-bit register block, such as MCG_C1[IRCLKEN]
+  or OSC_CR[ERCLKEN]. These registers generate a bus error on wider
+  accesses, so the generic clock-gate can't be used for them.
+
+  Accepts one specifier, which either gates the clock (when set to 0), or
+  ungates the clock (when set to 1).
+
+compatible: "nxp,kinetis-clock-gate"
+
+include: [clock-node.yaml]
+
+properties:
+  input:
+    type: phandle
+    required: true
+    description: |
+      phandle to upstream clock that this gate controls.
+
+  reg:
+    required: true
+    description: |
+      Tuple containing address of the 8-bit register and width of the
+      bitfield to set to ungate the clock.
+
+  offset:
+    type: int
+    required: true
+    description: |
+      Offset of bitfield within register to set to ungate clock.
+
+  wait-osc-init:
+    type: boolean
+    description: |
+      After ungating, wait for MCG_S[OSCINIT0] when the system oscillator is
+      in crystal mode. Set for gates that start the system oscillator.
+
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - gate

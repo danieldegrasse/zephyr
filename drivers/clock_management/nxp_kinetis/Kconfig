@@ -15,6 +15,15 @@ config CLOCK_MANAGEMENT_NXP_KINETIS_OSC
 	  NXP Kinetis system oscillator (OSC) driver. Programs the oscillator
 	  range, gain and load capacitance from devicetree properties.
 
+config CLOCK_MANAGEMENT_NXP_KINETIS_CLOCK_GATE
+	bool "NXP Kinetis 8-bit clock gate driver"
+	default y
+	depends on DT_HAS_NXP_KINETIS_CLOCK_GATE_ENABLED
+	select CLOCK_MANAGEMENT_NXP_KINETIS
+	help
+	  NXP Kinetis clock gate driver for gates within the 8-bit MCG and OSC
+	  register blocks.
+
 if CLOCK_MANAGEMENT_NXP_KINETIS
 
 config NXP_KINETIS_CLOCK_TIMEOUT
