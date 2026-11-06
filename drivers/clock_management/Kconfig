@@ -80,6 +80,14 @@ config CLOCK_MANAGEMENT_MUX
 	  A generic mux driver where a simple bitfield will unconditionally
 	  select a clock parent.
 
+config CLOCK_MANAGEMENT_DIV
+	bool "Clock divider driver"
+	default y
+	depends on DT_HAS_CLOCK_DIV_ENABLED
+	help
+	  A generic divider driver where a simple bitfield sets the division
+	  factor of a clock, using either a linear or power-of-2 encoding.
+
 source "drivers/clock_management/nxp_syscon/Kconfig"
 
 module = CLOCK_MANAGEMENT

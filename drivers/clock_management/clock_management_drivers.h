@@ -29,6 +29,10 @@ extern "C" {
 #define Z_CLOCK_MANAGEMENT_DATA_GET_clock_mux(node_id, prop, idx)      \
 	DT_PHA_BY_IDX(node_id, prop, idx, mux)
 
+#define Z_CLOCK_MANAGEMENT_DATA_DEFINE_clock_div(node_id, prop, idx)
+#define Z_CLOCK_MANAGEMENT_DATA_GET_clock_div(node_id, prop, idx)      \
+	DT_PHA_BY_IDX(node_id, prop, idx, divider)
+
 /** @endcond */
 
 #ifdef __cplusplus

@@ -1,0 +1,65 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Generic clock divider node. Divides its input clock by a factor programmed
+  into a register bitfield.
+
+  Accepts one specifier, which sets the integer division factor. A division
+  factor that cannot be encoded by the divider's bitfield is rejected.
+
+  The encoding of the divider bitfield is selected by the "div-type" property:
+    - "linear": The division factor is the field value plus one, so a field
+                of width N supports division factors 1 to 2^N.
+    - "pow2":   The division factor is two raised to the field value, so a
+                field of width N supports division factors 1 to 2^(2^N - 1).
+
+compatible: "clock-div"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Tuple containing address of register and width of the bitfield
+      used to set the division factor.
+
+  offset:
+    type: int
+    required: true
+    description: |
+      Offset of bitfield within register used to set the division factor.
+
+  div-type:
+    type: string
+    required: true
+    enum:
+      - "linear"
+      - "pow2"
+    description: |
+      Encoding type for the divider bitfield.
+
+  reg-io-width:
+    type: int
+    default: 4
+    enum:
+      - 1
+      - 2
+      - 4
+    description: |
+      Width in bytes of the register access used to read and write the
+      divider. Some peripherals (for example 8-bit register blocks) generate a
+      bus error if accessed with a wider access than the register width.
+
+  input:
+    type: phandle
+    required: true
+    description: |
+      phandle to upstream clock that this divider divides.
+
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - divider
