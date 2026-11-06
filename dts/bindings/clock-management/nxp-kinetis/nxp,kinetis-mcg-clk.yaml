@@ -1,0 +1,64 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Kinetis MCG clock node. Used for configuring the MCG clock subsystem state
+  selection. The node accepts the following specifiers:
+  - mode: Specifies the desired MCG mode for the clock.
+
+compatible: "nxp,kinetis-mcg-clk"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Address and size of the MCG base register.
+
+  sirc:
+    required: true
+    type: phandle
+    description: |
+      Phandle to the slow IRC clock node.
+
+  frdiv:
+    required: true
+    type: phandle
+    description: |
+      Phandle to the FLL external reference divider clock node.
+
+  oscsel:
+    required: true
+    type: phandle
+    description: |
+      Phandle to the MCG external reference select clock node.
+
+  ircs:
+    required: true
+    type: phandle
+    description: |
+      Phandle to the IRC select clock node.
+
+  pll:
+    required: true
+    type: phandle
+    description: |
+      Phandle to the PLL clock node.
+
+  "#clock-cells":
+    const: 1
+
+child-binding:
+  properties:
+    clk-type:
+      required: true
+      type: string
+      enum:
+        - out
+        - ff
+      description: |
+        Type of the MCG clock (out or ff).
+
+clock-cells:
+  - mode

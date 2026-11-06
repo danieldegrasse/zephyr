@@ -17,6 +17,7 @@ zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_MCG_FLL nxp_kin
 zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_MCG_PLL nxp_kinetis_mcg_pll.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_SIM_FRAC_DIV
         nxp_kinetis_sim_frac_div.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_MCG nxp_kinetis_mcg.c)
 
 # Header
 add_clock_management_header_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS nxp_kinetis_clocks.h)

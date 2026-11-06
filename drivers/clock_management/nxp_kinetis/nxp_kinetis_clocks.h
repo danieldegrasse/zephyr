@@ -57,6 +57,10 @@ extern "C" {
 #define Z_CLOCK_MANAGEMENT_DATA_GET_nxp_kinetis_mcg_fll(node_id, prop, idx)                       \
 	DT_PHA_BY_IDX(node_id, prop, idx, multiplier)
 
+#define Z_CLOCK_MANAGEMENT_DATA_DEFINE_nxp_kinetis_mcg_clk(node_id, prop, idx)
+#define Z_CLOCK_MANAGEMENT_DATA_GET_nxp_kinetis_mcg_clk(node_id, prop, idx)                       \
+	DT_PHA_BY_IDX(node_id, prop, idx, mode)
+
 struct nxp_kinetis_mcg_pll_cfg {
 	/* PLL reference divide factor (1-25) */
 	uint8_t prdiv;

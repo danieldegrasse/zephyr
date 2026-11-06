@@ -91,6 +91,15 @@ config CLOCK_MANAGEMENT_NXP_KINETIS_MCG_PLL
 	help
 	  NXP Kinetis MCG phase locked loop (PLL) driver
 
+config CLOCK_MANAGEMENT_NXP_KINETIS_MCG
+	bool "NXP Kinetis MCG driver"
+	default y
+	depends on DT_HAS_NXP_KINETIS_MCG_CLK_ENABLED
+	select CLOCK_MANAGEMENT_NXP_KINETIS
+	help
+	  NXP Kinetis MCG driver, which provides access to the MCG registers and
+	  overall MCG configuration.
+
 config CLOCK_MANAGEMENT_NXP_KINETIS_SIM_FRAC_DIV
 	bool "NXP Kinetis SIM fractional divider driver"
 	default y
