@@ -187,11 +187,6 @@
 		reg = <0x40064000 0x1>;
 		offset = <0x1>;
 		input = <&ircs>;
-
-		mcgirclk_clock: mcgirclk-clock {
-			compatible = "clock-output";
-			#clock-cells = <0>;
-		};
 	};
 
 	/* ----------------------------------------------------------------- */
@@ -220,35 +215,6 @@
 		input = <&oscsel>;
 	};
 
-	irefs: irefs@40064000 {
-		/* MCG_C1[IREFS] - FLL reference select (external or slow IRC) */
-		compatible = "nxp,kinetis-mcg-mux";
-		#clock-cells = <1>;
-		reg = <0x40064000 0x1>;
-		offset = <0x2>;
-		mux-type = "irefs";
-		input-sources = <&frdiv &slow_irc>;
-
-		/* MCG fixed frequency clock, used by the FlexTimers */
-		mcgffclk_clock: mcgffclk-clock {
-			compatible = "clock-output";
-			#clock-cells = <0>;
-		};
-	};
-
-	fll: fll@40064003 {
-		/* MCG_C4[DRST_DRS, DMX32] - FLL (MCGFLLCLK) */
-		compatible = "nxp,kinetis-mcg-fll";
-		#clock-cells = <1>;
-		reg = <0x40064003 0x1>;
-		input = <&irefs>;
-
-		mcgfllclk_clock: mcgfllclk-clock {
-			compatible = "clock-output";
-			#clock-cells = <0>;
-		};
-	};
-
 	/* ----------------------------------------------------------------- */
 	/* MCG PLL                                                           */
 	/* ----------------------------------------------------------------- */
@@ -273,29 +239,42 @@
 	/* MCG output clock (MCGOUTCLK)                                      */
 	/* ----------------------------------------------------------------- */
 
-	plls: plls@40064005 {
-		/* MCG_C6[PLLS] - FLL or PLL select */
-		compatible = "nxp,kinetis-mcg-mux";
-		#clock-cells = <1>;
-		reg = <0x40064005 0x1>;
-		offset = <0x6>;
-		mux-type = "plls";
-		input-sources = <&fll &pll>;
-	};
-
-	mcgoutclk: mcgoutclk@40064000 {
-		/*
-		 * MCG_C1[CLKS] - MCGOUTCLK source select, and MCG_C2[LP]
-		 * low power bypass. #clock-cells encodes CLKS and LP.
-		 */
-		compatible = "nxp,kinetis-mcg-clks";
-		#clock-cells = <2>;
+	mcgclk: mcgclk@40064000 {
 		reg = <0x40064000 0x1>;
-		input-sources = <&plls &ircs &oscsel>;
+		compatible = "nxp,kinetis-mcg-clk";
+		#clock-cells = <1>;
+		ircs = <&ircs>;
+		sirc = <&slow_irc>;
+		frdiv = <&frdiv>;
+		pll = <&pll>;
+		oscsel = <&oscsel>;
 
-		mcgoutclk_clock: mcgoutclk-clock {
-			compatible = "clock-output";
-			#clock-cells = <0>;
+		mcgoutclk: mcgoutclk {
+			clk-type = "out";
+
+			mcgoutclk_clk: mcgoutclk-clk {
+				compatible = "clock-output";
+				#clock-cells = <0>;
+			};
+		};
+
+		mcgfllclk: mcgfllclk {
+			compatible = "nxp,kinetis-mcg-fll";
+			#clock-cells = <1>;
+
+			mcgfllclk_clk: mcgfllclk-clk {
+				compatible = "clock-output";
+				#clock-cells = <0>;
+			};
+		};
+
+		mcgffclk {
+			clk-type = "ff";
+
+			mcgffclk_clock: mcgffclk-clock {
+				compatible = "clock-output";
+				#clock-cells = <0>;
+			};
 		};
 	};
 
@@ -416,7 +395,7 @@
 		#clock-cells = <1>;
 		reg = <0x40048004 0x2>;
 		offset = <0x10>;
-		input-sources = <&fll &pll &no_clock &irc48m>;
+		input-sources = <&mcgfllclk &pll &no_clock &irc48m>;
 
 		/* Also an I2S MCLK input option */
 		pllfllsel_clock: pllfllsel-clock {

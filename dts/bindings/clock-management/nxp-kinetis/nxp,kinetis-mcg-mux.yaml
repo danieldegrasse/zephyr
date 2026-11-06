@@ -10,12 +10,6 @@ description: |
   corresponding MCG_S status field after each change. The "mux-type"
   property selects this behavior:
     - "ircs":   C2[IRCS]. Waits for S[IRCST] while the IRC is enabled.
-    - "irefs":  C1[IREFS]. Waits for S[OSCINIT0] when selecting a crystal
-                external reference, then for S[IREFST], then for the FLL to
-                reacquire lock.
-    - "plls":   C6[PLLS]. Waits for S[PLLST], then for S[LOCK0] when
-                selecting the PLL, or for the FLL to reacquire lock when
-                selecting the FLL.
     - "oscsel": C7[OSCSEL]. Changes are rejected while the external
                 reference clocks the MCG (FEE, FBE, PBE, PEE, BLPE, or while
                 the PLL is enabled).
@@ -42,8 +36,6 @@ properties:
     required: true
     enum:
       - "ircs"
-      - "irefs"
-      - "plls"
       - "oscsel"
     description: |
       MCG selection this multiplexer controls.

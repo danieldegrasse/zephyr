@@ -44,12 +44,6 @@ static inline bool kinetis_mcg_lp_bypass(void)
 	       ((clkst == KINETIS_MCG_CLKST_IRC) || (clkst == KINETIS_MCG_CLKST_EXT));
 }
 
-/* The FLL is disabled whenever the PLL is selected, or in BLPx modes */
-static inline bool kinetis_mcg_fll_enabled(void)
-{
-	return ((MCG->S & MCG_S_PLLST_MASK) == 0U) && !kinetis_mcg_lp_bypass();
-}
-
 /* The PLL runs when selected by PLLS or enabled by PLLCLKEN0, except in BLPx modes */
 static inline bool kinetis_mcg_pll_enabled(void)
 {
@@ -98,26 +92,6 @@ static inline int kinetis_mcg_wait_pll_lock(void)
 {
 	return kinetis_wait8(&MCG->S, MCG_S_LOCK0_MASK, MCG_S_LOCK0_MASK);
 }
-
-#if defined(CONFIG_NXP_KINETIS_FLL_ACQUIRE_DELAY)
-/* The FLL has no lock indicator, so wait tfll_acquire after it is disturbed */
-static inline void kinetis_mcg_fll_acquire_delay(void)
-{
-	if (kinetis_mcg_fll_enabled()) {
-		/*
-		 * Kernel APIs may not be reliable while we are changing
-		 * the FLL clock, as systick may rely on it. Use a spin
-		 * loop here
-		 */
-		uint32_t wait = (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000) *
-				CONFIG_NXP_KINETIS_FLL_ACQUIRE_DELAY;
-
-		for (volatile int i = 0; i < wait; i++) {
-			/* spin */
-		}
-	}
-}
-#endif
 
 /*
  * RTC registers fault on access unless SIM_SCGC6[RTC] is set. Enable access

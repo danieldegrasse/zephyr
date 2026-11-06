@@ -10,10 +10,8 @@ zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_RTC_CLKOUT
 zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_MCG_FCRDIV
         nxp_kinetis_mcg_fcrdiv.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_MCG_MUX nxp_kinetis_mcg_mux.c)
-zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_MCG_CLKS nxp_kinetis_mcg_clks.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_MCG_FRDIV
         nxp_kinetis_mcg_frdiv.c)
-zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_MCG_FLL nxp_kinetis_mcg_fll.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_MCG_PLL nxp_kinetis_mcg_pll.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_SIM_FRAC_DIV
         nxp_kinetis_sim_frac_div.c)

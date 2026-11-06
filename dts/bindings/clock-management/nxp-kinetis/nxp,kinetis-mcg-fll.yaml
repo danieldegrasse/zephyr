@@ -19,17 +19,6 @@ compatible: "nxp,kinetis-mcg-fll"
 include: [clock-node.yaml]
 
 properties:
-  reg:
-    required: true
-    description: |
-      Address and size of the MCG_C4 register.
-
-  input:
-    type: phandle
-    required: true
-    description: |
-      phandle to the FLL reference select (IREFS).
-
   "#clock-cells":
     const: 1
 

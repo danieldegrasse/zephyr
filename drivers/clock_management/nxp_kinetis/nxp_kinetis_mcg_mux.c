@@ -18,10 +18,6 @@
 enum kinetis_mcg_mux_type {
 	/* C2[IRCS]: slow or fast IRC, reflected by S[IRCST] */
 	KINETIS_MCG_MUX_IRCS,
-	/* C1[IREFS]: FLL reference, reflected by S[IREFST] */
-	KINETIS_MCG_MUX_IREFS,
-	/* C6[PLLS]: FLL or PLL, reflected by S[PLLST] */
-	KINETIS_MCG_MUX_PLLS,
 	/* C7[OSCSEL]: external reference, must not change while it is in use */
 	KINETIS_MCG_MUX_OSCSEL,
 	KINETIS_MCG_MUX_MAX,
@@ -64,8 +60,6 @@ static int kinetis_mcg_mux_check(const struct kinetis_mcg_mux_config *config, ui
 /* Wait for a new selection to take effect */
 static int kinetis_mcg_mux_sync(const struct kinetis_mcg_mux_config *config, uint8_t sel)
 {
-	int ret;
-
 	switch (config->type) {
 	case KINETIS_MCG_MUX_IRCS:
 		/* IRCST only updates while the internal reference clock is enabled */
@@ -74,33 +68,6 @@ static int kinetis_mcg_mux_sync(const struct kinetis_mcg_mux_config *config, uin
 			return 0;
 		}
 		return kinetis_wait8(&MCG->S, MCG_S_IRCST_MASK, MCG_S_IRCST(sel));
-	case KINETIS_MCG_MUX_IREFS:
-		/* Selecting the external reference requests the oscillator */
-		if ((sel == 0U) && kinetis_mcg_ext_ref_is_crystal()) {
-			ret = kinetis_mcg_wait_osc_init();
-			if (ret < 0) {
-				return ret;
-			}
-		}
-		ret = kinetis_wait8(&MCG->S, MCG_S_IREFST_MASK, MCG_S_IREFST(sel));
-		if (ret < 0) {
-			return ret;
-		}
-		/* The FLL relocks after its reference changes */
-		kinetis_mcg_fll_acquire_delay();
-		return 0;
-	case KINETIS_MCG_MUX_PLLS:
-		ret = kinetis_wait8(&MCG->S, MCG_S_PLLST_MASK, MCG_S_PLLST(sel));
-		if (ret < 0) {
-			return ret;
-		}
-		if (sel == 0U) {
-			/* The FLL restarts when it is selected */
-			kinetis_mcg_fll_acquire_delay();
-			return 0;
-		}
-		/* The PLL is disabled in BLPE mode, so will not lock */
-		return kinetis_mcg_lp_bypass() ? 0 : kinetis_mcg_wait_pll_lock();
 	default:
 		return 0;
 	}
