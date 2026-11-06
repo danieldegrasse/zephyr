@@ -169,11 +169,29 @@ arduino_spi: &spi0 {
 	clock-source = "fixed";
 };
 
+&osc0 {
+	mode = "low-power";
+	frequency = <8000000>;
+};
+
+&system_clock {
+	/* Move from FEI -> FBE -> PBE -> PEE mode */
+	system_clock_72_mhz: system-clock-72mhz {
+		compatible = "clock-state";
+		clocks = <&outdiv1 1 &outdiv2 2 &outdiv3 3 &outdiv4 3
+			  &osc0 1 &irefs 0 &frdiv 256 &plls 0 &mcgoutclk 2 0 /* FBE */
+			  &pll 4 36 1 &plls 1 /* PBE */
+			  &mcgoutclk 0 0 /* PEE */>;
+	};
+};
+
 &uart1 {
 	status = "okay";
 	current-speed = <115200>;
 	pinctrl-0 = <&uart1_default>;
 	pinctrl-names = "default";
+	clock-request-0 = <&system_clock_72_mhz>;
+	clock-request-names = "default";
 };
 
 &uart2 {
