@@ -32,6 +32,15 @@ config CLOCK_MANAGEMENT_NXP_KINETIS_RTC_OSC
 	help
 	  NXP Kinetis 32.768 kHz RTC oscillator driver
 
+config CLOCK_MANAGEMENT_NXP_KINETIS_RTC_CLKOUT
+	bool "NXP Kinetis RTC 32 kHz clock output driver"
+	default y
+	depends on DT_HAS_NXP_KINETIS_RTC_CLKOUT_ENABLED
+	select CLOCK_MANAGEMENT_NXP_KINETIS
+	help
+	  NXP Kinetis driver for the RTC_CR[CLKO] gate, which controls whether
+	  the RTC 32 kHz clock is output to other peripherals.
+
 if CLOCK_MANAGEMENT_NXP_KINETIS
 
 config NXP_KINETIS_CLOCK_TIMEOUT

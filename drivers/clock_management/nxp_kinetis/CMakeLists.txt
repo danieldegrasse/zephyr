@@ -5,6 +5,8 @@ zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_OSC nxp_kinetis
 zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_CLOCK_GATE
         nxp_kinetis_clock_gate.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_RTC_OSC nxp_kinetis_rtc_osc.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_RTC_CLKOUT
+        nxp_kinetis_rtc_clkout.c)
 
 # Header
 add_clock_management_header_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS nxp_kinetis_clocks.h)

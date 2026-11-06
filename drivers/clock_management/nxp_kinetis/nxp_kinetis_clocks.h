@@ -27,6 +27,10 @@ extern "C" {
 #define Z_CLOCK_MANAGEMENT_DATA_GET_nxp_kinetis_rtc_osc(node_id, prop, idx)                       \
 	DT_PHA_BY_IDX(node_id, prop, idx, enable)
 
+#define Z_CLOCK_MANAGEMENT_DATA_DEFINE_nxp_kinetis_rtc_clkout(node_id, prop, idx)
+#define Z_CLOCK_MANAGEMENT_DATA_GET_nxp_kinetis_rtc_clkout(node_id, prop, idx)                    \
+	DT_PHA_BY_IDX(node_id, prop, idx, gate)
+
 /** @endcond */
 
 #ifdef __cplusplus
