@@ -1,0 +1,29 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+config CLOCK_MANAGEMENT_NXP_KINETIS
+	bool
+	help
+	  NXP Kinetis clock management drivers
+
+config CLOCK_MANAGEMENT_NXP_KINETIS_OSC
+	bool "NXP Kinetis system oscillator driver"
+	default y
+	depends on DT_HAS_NXP_KINETIS_OSC_ENABLED
+	select CLOCK_MANAGEMENT_NXP_KINETIS
+	help
+	  NXP Kinetis system oscillator (OSC) driver. Programs the oscillator
+	  range, gain and load capacitance from devicetree properties.
+
+if CLOCK_MANAGEMENT_NXP_KINETIS
+
+config NXP_KINETIS_CLOCK_TIMEOUT
+	int "NXP Kinetis clock status timeout (in microseconds)"
+	default 1000000
+	help
+	  Timeout value for waiting on MCG status bits (CLKST, IREFST, PLLST,
+	  IRCST, LOCK0 and OSCINIT0) to reflect a new configuration. The
+	  longest expected wait is crystal oscillator startup, which can take
+	  up to one second for a 32 kHz crystal.
+
+endif # CLOCK_MANAGEMENT_NXP_KINETIS

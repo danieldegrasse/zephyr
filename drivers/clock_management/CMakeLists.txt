@@ -16,6 +16,7 @@ zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_DIV clock_div.c)
 add_clock_management_header(clock_management_drivers.h)
 
 add_subdirectory(common)
+add_subdirectory(nxp_kinetis)
 add_subdirectory(nxp_syscon)
 
 # Include headers for all clock management drivers, registered with add_clock_management_header

@@ -1,0 +1,59 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Kinetis system oscillator (OSC). The oscillator has no enable bit- it runs
+  whenever OSCERCLK is enabled or the MCG requests the external reference.
+
+  The oscillator range, gain and input mode are fixed by board hardware, so
+  they are described with properties rather than specifiers. MCG_C2[RANGE] is
+  derived from the "frequency" property, and MCG_C2[EREFS, HGO] from the
+  "mode" property. The reference manual forbids changing these settings while
+  the oscillator is running.
+
+  Accepts one specifier. Setting it to 1 programs the oscillator settings
+  into MCG_C2 and the load capacitors into OSC_CR. The oscillator can't be
+  gated directly, so a value of 0 is rejected. The node reports its frequency
+  only once the oscillator settings are programmed.
+
+compatible: "nxp,kinetis-osc"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Address and size of the OSC_CR register.
+
+  frequency:
+    type: int
+    required: true
+    description: |
+      Frequency of the crystal or external clock connected to EXTAL, in Hz.
+
+  mode:
+    type: string
+    required: true
+    enum:
+      - "external"
+      - "low-power"
+      - "high-gain"
+    description: |
+      Oscillator operating mode:
+        - "external": an external clock drives EXTAL (MCG_C2[EREFS] = 0)
+        - "low-power": crystal oscillator, low power mode (EREFS = 1, HGO = 0)
+        - "high-gain": crystal oscillator, high gain mode (EREFS = 1, HGO = 1)
+
+  load-capacitance-pf:
+    type: int
+    default: 0
+    description: |
+      Internal load capacitance to add to the oscillator, in picofarads.
+      Must be an even value from 0 to 30, programmed via OSC_CR[SCxP].
+
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - enable

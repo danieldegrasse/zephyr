@@ -88,6 +88,7 @@ config CLOCK_MANAGEMENT_DIV
 	  A generic divider driver where a simple bitfield sets the division
 	  factor of a clock, using either a linear or power-of-2 encoding.
 
+source "drivers/clock_management/nxp_kinetis/Kconfig"
 source "drivers/clock_management/nxp_syscon/Kconfig"
 
 module = CLOCK_MANAGEMENT
