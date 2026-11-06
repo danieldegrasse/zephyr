@@ -1,0 +1,43 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Kinetis MCG output clock (MCGOUTCLK) source select, MCG_C1[CLKS], combined
+  with the low power bypass bit MCG_C2[LP].
+
+  Accepts two specifiers:
+    - clks: MCGOUTCLK source. 0 selects the FLL or PLL output (as selected by
+      C6[PLLS]), 1 the internal reference clock, and 2 the external
+      reference clock. These index the "input-sources" property.
+    - lp: Set to 1 to enter a bypassed low power mode (BLPI or BLPE), which
+      disables the FLL and PLL. Only valid when clks is 1 or 2.
+
+  The MCG only permits certain mode transitions (see the MCG mode state
+  diagram in the reference manual). Clock states must step through legal
+  modes in order, for example FEI -> FBE -> PBE -> PEE. The driver waits for
+  S[CLKST] after each change, for S[LOCK0] before selecting a PLL output,
+  and for S[OSCINIT0] when selecting a crystal external reference.
+
+compatible: "nxp,kinetis-mcg-clks"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Address and size of the MCG_C1 register.
+
+  input-sources:
+    type: phandles
+    required: true
+    description: |
+      FLL/PLL select (PLLS), internal reference select (IRCS), and external
+      reference select (OSCSEL) clock nodes, in that order.
+
+  "#clock-cells":
+    const: 2
+
+clock-cells:
+  - clks
+  - lp

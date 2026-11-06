@@ -15,6 +15,9 @@ extern "C" {
 
 /** @cond INTERNAL_HIDDEN */
 
+/* Bit position of the LP flag within MCG CLKS mux configuration data */
+#define NXP_KINETIS_MCG_CLKS_LP_SHIFT 8
+
 #define Z_CLOCK_MANAGEMENT_DATA_DEFINE_nxp_kinetis_osc(node_id, prop, idx)
 #define Z_CLOCK_MANAGEMENT_DATA_GET_nxp_kinetis_osc(node_id, prop, idx)                           \
 	DT_PHA_BY_IDX(node_id, prop, idx, enable)
@@ -38,6 +41,11 @@ extern "C" {
 #define Z_CLOCK_MANAGEMENT_DATA_DEFINE_nxp_kinetis_mcg_mux(node_id, prop, idx)
 #define Z_CLOCK_MANAGEMENT_DATA_GET_nxp_kinetis_mcg_mux(node_id, prop, idx)                       \
 	DT_PHA_BY_IDX(node_id, prop, idx, mux)
+
+#define Z_CLOCK_MANAGEMENT_DATA_DEFINE_nxp_kinetis_mcg_clks(node_id, prop, idx)
+#define Z_CLOCK_MANAGEMENT_DATA_GET_nxp_kinetis_mcg_clks(node_id, prop, idx)                      \
+	((DT_PHA_BY_IDX(node_id, prop, idx, lp) << NXP_KINETIS_MCG_CLKS_LP_SHIFT) |               \
+	 DT_PHA_BY_IDX(node_id, prop, idx, clks))
 
 /** @endcond */
 
