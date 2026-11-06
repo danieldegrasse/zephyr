@@ -41,6 +41,14 @@ config CLOCK_MANAGEMENT_NXP_KINETIS_RTC_CLKOUT
 	  NXP Kinetis driver for the RTC_CR[CLKO] gate, which controls whether
 	  the RTC 32 kHz clock is output to other peripherals.
 
+config CLOCK_MANAGEMENT_NXP_KINETIS_MCG_FCRDIV
+	bool "NXP Kinetis MCG fast IRC divider driver"
+	default y
+	depends on DT_HAS_NXP_KINETIS_MCG_FCRDIV_ENABLED
+	select CLOCK_MANAGEMENT_NXP_KINETIS
+	help
+	  NXP Kinetis MCG fast internal reference clock divider (FCRDIV) driver
+
 if CLOCK_MANAGEMENT_NXP_KINETIS
 
 config NXP_KINETIS_CLOCK_TIMEOUT

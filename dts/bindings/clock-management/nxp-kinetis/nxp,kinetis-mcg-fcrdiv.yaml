@@ -1,0 +1,33 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Kinetis MCG fast internal reference clock divider, MCG_SC[FCRDIV].
+
+  Accepts one specifier, which sets the division factor. Valid values are
+  powers of two from 1 to 128. The divider can't change while the fast IRC is
+  enabled (selected by C2[IRCS] and used for MCGIRCLK or MCGOUTCLK), so such
+  changes are rejected. The write-1-to-clear flags in MCG_SC (LOCS0 and ATMF)
+  are preserved when the divider is written.
+
+compatible: "nxp,kinetis-mcg-fcrdiv"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Address and size of the MCG_SC register.
+
+  input:
+    type: phandle
+    required: true
+    description: |
+      phandle to the fast internal reference clock.
+
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - divider
