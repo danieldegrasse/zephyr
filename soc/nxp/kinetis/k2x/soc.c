@@ -125,7 +125,9 @@ void soc_early_init_hook(void)
 	PMC->REGSC |= PMC_REGSC_ACKISO_MASK;
 
 	/* Initialize PLL/system clock to 120 MHz */
+#ifndef CONFIG_CLOCK_MANAGEMENT
 	clock_init();
+#endif
 }
 
 #ifdef CONFIG_SOC_RESET_HOOK
