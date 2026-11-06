@@ -67,6 +67,14 @@ config CLOCK_MANAGEMENT_NXP_KINETIS_MCG_CLKS
 	  NXP Kinetis MCGOUTCLK source select (CLKS) and low power bypass (LP)
 	  driver
 
+config CLOCK_MANAGEMENT_NXP_KINETIS_MCG_FRDIV
+	bool "NXP Kinetis MCG FLL reference divider driver"
+	default y
+	depends on DT_HAS_NXP_KINETIS_MCG_FRDIV_ENABLED
+	select CLOCK_MANAGEMENT_NXP_KINETIS
+	help
+	  NXP Kinetis MCG FLL external reference divider (FRDIV) driver
+
 if CLOCK_MANAGEMENT_NXP_KINETIS
 
 config NXP_KINETIS_CLOCK_TIMEOUT

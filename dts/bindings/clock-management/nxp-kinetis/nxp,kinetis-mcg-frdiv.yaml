@@ -1,0 +1,38 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Kinetis MCG FLL external reference divider, MCG_C1[FRDIV].
+
+  Accepts one specifier, which sets the division factor. The available
+  factors depend on the external reference: when MCG_C2[RANGE] is 0 or the
+  RTC oscillator is selected (C7[OSCSEL] = 1), the factor may be 1, 2, 4, 8,
+  16, 32, 64 or 128. Otherwise, it may be 32, 64, 128, 256, 512, 1024, 1280
+  or 1536. The divided reference must be within 31.25-39.0625 kHz when the
+  FLL is engaged.
+
+  The divider reads C2[RANGE] and C7[OSCSEL] directly. Rate change
+  notifications sent while OSCSEL is changing are therefore calculated with
+  the previous OSCSEL encoding.
+
+compatible: "nxp,kinetis-mcg-frdiv"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Address and size of the MCG_C1 register.
+
+  input:
+    type: phandle
+    required: true
+    description: |
+      phandle to the MCG external reference select.
+
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - divider
