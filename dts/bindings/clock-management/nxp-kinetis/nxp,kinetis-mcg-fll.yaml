@@ -1,0 +1,37 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Kinetis MCG frequency locked loop (FLL), configured by MCG_C4[DRST_DRS,
+  DMX32].
+
+  Accepts one specifier, which sets the FLL multiplication factor. Valid
+  factors are 640, 1280, 1920 and 2560 (DMX32 = 0), or 732, 1464, 2197 and
+  2929 (DMX32 = 1, intended for a 32.768 kHz reference). The factor can't
+  change while MCG_C2[LP] is set.
+
+  The FLL is disabled while C6[PLLS] selects the PLL, or in BLPI/BLPE mode,
+  and reports a rate of 0 then. Because these settings belong to other
+  nodes, a cached FLL rate is not refreshed when they change.
+
+compatible: "nxp,kinetis-mcg-fll"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Address and size of the MCG_C4 register.
+
+  input:
+    type: phandle
+    required: true
+    description: |
+      phandle to the FLL reference select (IREFS).
+
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - multiplier
