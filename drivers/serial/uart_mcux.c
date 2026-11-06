@@ -16,11 +16,18 @@
 #include <soc.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/drivers/pinctrl.h>
+#include <zephyr/drivers/clock_management.h>
 
 struct uart_mcux_config {
 	UART_Type *base;
+#ifdef CONFIG_CLOCK_MANAGEMENT
+	const struct clock_management_data *clock_data;
+	clock_output_t clock_output;
+	clock_request_t clock_req_default;
+#else
 	const struct device *clock_dev;
 	clock_control_subsys_t clock_subsys;
+#endif
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	void (*irq_config_func)(const struct device *dev);
 #endif
@@ -44,6 +51,10 @@ static int uart_mcux_configure(const struct device *dev,
 	uint32_t clock_freq;
 	status_t retval;
 
+#ifdef CONFIG_CLOCK_MANAGEMENT
+	clock_management_request_state(config->clock_data, config->clock_req_default);
+	clock_freq = clock_management_get_rate(config->clock_data, config->clock_output);
+#else
 	if (!device_is_ready(config->clock_dev)) {
 		return -ENODEV;
 	}
@@ -52,6 +63,7 @@ static int uart_mcux_configure(const struct device *dev,
 				   &clock_freq)) {
 		return -EINVAL;
 	}
+#endif
 
 	UART_GetDefaultConfig(&uart_config);
 
@@ -346,10 +358,18 @@ static int uart_mcux_pm_action(const struct device *dev, enum pm_device_action a
 
 	switch (action) {
 	case PM_DEVICE_ACTION_RESUME:
+#ifdef CONFIG_CLOCK_MANAGEMENT
+		clock_management_on(config->clock_data, config->clock_output);
+#else
 		clock_control_on(config->clock_dev, config->clock_subsys);
+#endif
 		break;
 	case PM_DEVICE_ACTION_SUSPEND:
+#ifdef CONFIG_CLOCK_MANAGEMENT
+		clock_management_off(config->clock_data, config->clock_output);
+#else
 		clock_control_off(config->clock_dev, config->clock_subsys);
+#endif
 		break;
 	case PM_DEVICE_ACTION_TURN_OFF:
 		return 0;
@@ -387,11 +407,27 @@ static DEVICE_API(uart, uart_mcux_driver_api) = {
 #endif
 };
 
+#ifdef CONFIG_CLOCK_MANAGEMENT
+#define UART_MCUX_CLK_DEFINE(n)                                         \
+	CLOCK_MANAGEMENT_DT_INST_DEFINE(n)
+#define UART_MCUX_CLK_INIT(n)                                           \
+	.clock_data = CLOCK_MANAGEMENT_DT_INST_GET(n),                  \
+	.clock_output = CLOCK_MANAGEMENT_DT_INST_GET_OUTPUT(n),         \
+	.clock_req_default = CLOCK_MANAGEMENT_DT_INST_GET_REQUEST(n, default),
+#else
+#define UART_MCUX_CLK_DEFINE(n)
+#define UART_MCUX_CLK_INIT(n)                                           \
+	.clock_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(n)),		\
+	.clock_subsys = (clock_control_subsys_t)DT_INST_CLOCKS_CELL(n, name),
+#endif
+
+
+
 #define UART_MCUX_DECLARE_CFG(n, IRQ_FUNC_INIT)				\
+UART_MCUX_CLK_DEFINE(n)                                                 \
 static const struct uart_mcux_config uart_mcux_##n##_config = {		\
 	.base = (UART_Type *)DT_INST_REG_ADDR(n),			\
-	.clock_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(n)),		\
-	.clock_subsys = (clock_control_subsys_t)DT_INST_CLOCKS_CELL(n, name),\
+	UART_MCUX_CLK_INIT(n)						\
 	.pincfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),			\
 	IRQ_FUNC_INIT							\
 }
