@@ -99,6 +99,31 @@ static inline int kinetis_mcg_wait_pll_lock(void)
 	return kinetis_wait8(&MCG->S, MCG_S_LOCK0_MASK, MCG_S_LOCK0_MASK);
 }
 
+/*
+ * RTC registers fault on access unless SIM_SCGC6[RTC] is set. Enable access
+ * around RTC_CR accesses, and restore the previous gate state afterwards.
+ */
+static inline bool kinetis_rtc_access_begin(void)
+{
+	unsigned int key = irq_lock();
+	bool was_enabled = (SIM->SCGC6 & SIM_SCGC6_RTC_MASK) != 0U;
+
+	SIM->SCGC6 |= SIM_SCGC6_RTC_MASK;
+	irq_unlock(key);
+	return was_enabled;
+}
+
+static inline void kinetis_rtc_access_end(bool was_enabled)
+{
+	unsigned int key;
+
+	if (!was_enabled) {
+		key = irq_lock();
+		SIM->SCGC6 &= ~SIM_SCGC6_RTC_MASK;
+		irq_unlock(key);
+	}
+}
+
 #ifdef __cplusplus
 }
 #endif

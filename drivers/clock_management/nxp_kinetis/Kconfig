@@ -24,6 +24,14 @@ config CLOCK_MANAGEMENT_NXP_KINETIS_CLOCK_GATE
 	  NXP Kinetis clock gate driver for gates within the 8-bit MCG and OSC
 	  register blocks.
 
+config CLOCK_MANAGEMENT_NXP_KINETIS_RTC_OSC
+	bool "NXP Kinetis RTC oscillator driver"
+	default y
+	depends on DT_HAS_NXP_KINETIS_RTC_OSC_ENABLED
+	select CLOCK_MANAGEMENT_NXP_KINETIS
+	help
+	  NXP Kinetis 32.768 kHz RTC oscillator driver
+
 if CLOCK_MANAGEMENT_NXP_KINETIS
 
 config NXP_KINETIS_CLOCK_TIMEOUT
@@ -36,3 +44,13 @@ config NXP_KINETIS_CLOCK_TIMEOUT
 	  up to one second for a 32 kHz crystal.
 
 endif # CLOCK_MANAGEMENT_NXP_KINETIS
+
+config NXP_KINETIS_RTC_OSC_STARTUP_DELAY
+	int "NXP Kinetis RTC oscillator startup delay (in microseconds)"
+	default 0
+	depends on CLOCK_MANAGEMENT_NXP_KINETIS_RTC_OSC
+	help
+	  Time to wait after enabling the RTC oscillator before it is treated
+	  as stable. The RTC oscillator has no ready status bit. Boards that
+	  use the RTC oscillator as an MCG reference should set this to the
+	  crystal startup time from the device datasheet.
