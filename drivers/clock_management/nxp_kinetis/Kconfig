@@ -83,6 +83,14 @@ config CLOCK_MANAGEMENT_NXP_KINETIS_MCG_FLL
 	help
 	  NXP Kinetis MCG frequency locked loop (FLL) driver
 
+config CLOCK_MANAGEMENT_NXP_KINETIS_MCG_PLL
+	bool "NXP Kinetis MCG PLL driver"
+	default y
+	depends on DT_HAS_NXP_KINETIS_MCG_PLL_ENABLED
+	select CLOCK_MANAGEMENT_NXP_KINETIS
+	help
+	  NXP Kinetis MCG phase locked loop (PLL) driver
+
 if CLOCK_MANAGEMENT_NXP_KINETIS
 
 config NXP_KINETIS_CLOCK_TIMEOUT

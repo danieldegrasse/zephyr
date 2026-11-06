@@ -55,6 +55,25 @@ extern "C" {
 #define Z_CLOCK_MANAGEMENT_DATA_GET_nxp_kinetis_mcg_fll(node_id, prop, idx)                       \
 	DT_PHA_BY_IDX(node_id, prop, idx, multiplier)
 
+struct nxp_kinetis_mcg_pll_cfg {
+	/* PLL reference divide factor (1-25) */
+	uint8_t prdiv;
+	/* VCO multiply factor (24-55) */
+	uint8_t vdiv;
+	/* Set C5[PLLCLKEN0], enabling the PLL independently of C6[PLLS] */
+	uint8_t enable;
+};
+
+#define Z_CLOCK_MANAGEMENT_DATA_DEFINE_nxp_kinetis_mcg_pll(node_id, prop, idx)                    \
+	static const struct nxp_kinetis_mcg_pll_cfg _CONCAT(                                       \
+		nxp_kinetis_mcg_pll_cfg_, _CONCAT(DT_DEP_ORD(node_id), idx)) = {                   \
+		.prdiv = DT_PHA_BY_IDX(node_id, prop, idx, prdiv),                                 \
+		.vdiv = DT_PHA_BY_IDX(node_id, prop, idx, vdiv),                                   \
+		.enable = DT_PHA_BY_IDX(node_id, prop, idx, enable),                               \
+	};
+#define Z_CLOCK_MANAGEMENT_DATA_GET_nxp_kinetis_mcg_pll(node_id, prop, idx)                       \
+	&_CONCAT(nxp_kinetis_mcg_pll_cfg_, _CONCAT(DT_DEP_ORD(node_id), idx))
+
 /** @endcond */
 
 #ifdef __cplusplus

@@ -1,0 +1,42 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Kinetis MCG phase locked loop (PLL), configured by MCG_C5[PRDIV0,
+  PLLCLKEN0] and MCG_C6[VDIV0]. Output rate is (input / prdiv) * vdiv.
+
+  Accepts three specifiers:
+    - prdiv: PLL reference divider, from 1 to 25. The divided reference
+      must be within 2-4 MHz whenever the PLL runs.
+    - vdiv: VCO multiplier, from 24 to 55.
+    - enable: set to 1 to set C5[PLLCLKEN0], enabling MCGPLLCLK
+      independently of C6[PLLS].
+
+  The PLL also runs while C6[PLLS] selects it. It is disabled in BLPI/BLPE
+  mode, and reports a rate of 0 when not running. The dividers are only
+  changed once the PLL is locked, and can't be changed while the PLL
+  clocks MCGOUTCLK (PEE mode).
+
+compatible: "nxp,kinetis-mcg-pll"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Address and size of the MCG_C5 and MCG_C6 registers.
+
+  input:
+    type: phandle
+    required: true
+    description: |
+      phandle to the MCG external reference select (OSCSEL).
+
+  "#clock-cells":
+    const: 3
+
+clock-cells:
+  - prdiv
+  - vdiv
+  - enable
