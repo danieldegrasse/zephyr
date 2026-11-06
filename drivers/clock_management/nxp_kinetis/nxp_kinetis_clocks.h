@@ -35,6 +35,10 @@ extern "C" {
 #define Z_CLOCK_MANAGEMENT_DATA_GET_nxp_kinetis_mcg_fcrdiv(node_id, prop, idx)                    \
 	DT_PHA_BY_IDX(node_id, prop, idx, divider)
 
+#define Z_CLOCK_MANAGEMENT_DATA_DEFINE_nxp_kinetis_mcg_mux(node_id, prop, idx)
+#define Z_CLOCK_MANAGEMENT_DATA_GET_nxp_kinetis_mcg_mux(node_id, prop, idx)                       \
+	DT_PHA_BY_IDX(node_id, prop, idx, mux)
+
 /** @endcond */
 
 #ifdef __cplusplus

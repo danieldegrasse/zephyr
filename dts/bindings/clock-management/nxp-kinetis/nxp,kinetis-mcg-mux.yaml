@@ -1,0 +1,62 @@
+# Copyright 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Kinetis MCG multiplexer. Accepts one specifier, which sets the multiplexer
+  selection to the given zero based index in the "input-sources" phandle
+  array for the given node.
+
+  MCG selections take effect asynchronously, so the driver waits for the
+  corresponding MCG_S status field after each change. The "mux-type"
+  property selects this behavior:
+    - "ircs":   C2[IRCS]. Waits for S[IRCST] while the IRC is enabled.
+    - "irefs":  C1[IREFS]. Waits for S[OSCINIT0] when selecting a crystal
+                external reference, then for S[IREFST], then for the FLL to
+                reacquire lock.
+    - "plls":   C6[PLLS]. Waits for S[PLLST], then for S[LOCK0] when
+                selecting the PLL, or for the FLL to reacquire lock when
+                selecting the FLL.
+    - "oscsel": C7[OSCSEL]. Changes are rejected while the external
+                reference clocks the MCG (FEE, FBE, PBE, PEE, BLPE, or while
+                the PLL is enabled).
+
+compatible: "nxp,kinetis-mcg-mux"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Tuple containing address of the 8-bit MCG register and width of the
+      bitfield to set to set the multiplexer selection.
+
+  offset:
+    type: int
+    required: true
+    description: |
+      Offset of bitfield within register to set to configure multiplexer.
+
+  mux-type:
+    type: string
+    required: true
+    enum:
+      - "ircs"
+      - "irefs"
+      - "plls"
+      - "oscsel"
+    description: |
+      MCG selection this multiplexer controls.
+
+  input-sources:
+    type: phandles
+    required: true
+    description: |
+      List of all input sources provided to the multiplexer. These sources
+      should be references to other clock nodes within the clock tree.
+
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - mux

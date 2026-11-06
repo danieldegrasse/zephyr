@@ -9,6 +9,7 @@ zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_RTC_CLKOUT
         nxp_kinetis_rtc_clkout.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_MCG_FCRDIV
         nxp_kinetis_mcg_fcrdiv.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS_MCG_MUX nxp_kinetis_mcg_mux.c)
 
 # Header
 add_clock_management_header_ifdef(CONFIG_CLOCK_MANAGEMENT_NXP_KINETIS nxp_kinetis_clocks.h)

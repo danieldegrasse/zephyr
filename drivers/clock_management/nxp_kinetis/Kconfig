@@ -49,6 +49,15 @@ config CLOCK_MANAGEMENT_NXP_KINETIS_MCG_FCRDIV
 	help
 	  NXP Kinetis MCG fast internal reference clock divider (FCRDIV) driver
 
+config CLOCK_MANAGEMENT_NXP_KINETIS_MCG_MUX
+	bool "NXP Kinetis MCG multiplexer driver"
+	default y
+	depends on DT_HAS_NXP_KINETIS_MCG_MUX_ENABLED
+	select CLOCK_MANAGEMENT_NXP_KINETIS
+	help
+	  NXP Kinetis MCG multiplexer driver, for the IRCS, IREFS, PLLS and
+	  OSCSEL selections
+
 if CLOCK_MANAGEMENT_NXP_KINETIS
 
 config NXP_KINETIS_CLOCK_TIMEOUT
@@ -61,6 +70,15 @@ config NXP_KINETIS_CLOCK_TIMEOUT
 	  up to one second for a 32 kHz crystal.
 
 endif # CLOCK_MANAGEMENT_NXP_KINETIS
+
+config NXP_KINETIS_FLL_ACQUIRE_DELAY
+	int "NXP Kinetis FLL acquisition delay (in microseconds)"
+	default 1000
+	depends on CLOCK_MANAGEMENT_NXP_KINETIS_MCG_MUX
+	help
+	  Time to wait for the FLL to lock after its reference or
+	  multiplication factor changes. The FLL has no lock status bit, so
+	  this should match the tfll_acquire value from the device datasheet.
 
 config NXP_KINETIS_RTC_OSC_STARTUP_DELAY
 	int "NXP Kinetis RTC oscillator startup delay (in microseconds)"
