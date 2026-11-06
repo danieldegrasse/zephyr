@@ -1,0 +1,1037 @@
+/*
+ * Copyright (c) 2026 Analog Devices Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Clock tree for the NXP Kinetis K22F (K22P121M120SF7RM).
+ *
+ * Modeled on the NXP LPC55S6x clock devicetree: every configurable element of
+ * the clock tree is described as a node, and the 'reg' property of each node
+ * points at the register used to configure it. Where a node produces an
+ * observable output that a consumer can use, a "clock-output" child node is
+ * added. All nodes live under the SIM node, though they span the MCG, OSC,
+ * RTC and SIM register blocks.
+ *
+ * Per-peripheral clock gates (SIM_SCGCx) are modeled as "clock-gate" nodes
+ * with their own "clock-output" child. The input of each gate is the clock
+ * the peripheral is functionally clocked from (see the "Module clocks" table
+ * in the Clock Distribution chapter). Clock selections that live inside a
+ * single peripheral's own registers (I2S MCLK, LPTMR, ADC, FTM, WDOG clock
+ * source selects) are left to the peripheral drivers. Instead, the clocks
+ * those peripherals select between are exposed as clock outputs.
+ *
+ * The MCG and OSC register blocks are 8-bit, and generate a bus error on
+ * wider accesses. Nodes within those blocks therefore use Kinetis specific
+ * drivers, or set "reg-io-width" on generic nodes.
+ *
+ * MCG mode changes must follow the MCG mode state diagram in the reference
+ * manual. The MCG nodes wait for their status bits, but do not enforce legal
+ * mode transitions- clock states must step through legal modes in order. For
+ * example, moving from FEI to PEE with an 8 MHz crystal:
+ *
+ *   &osc0 1                  configure the oscillator
+ *   &oscsel 0 &frdiv 256     FLL reference = 8 MHz / 256 = 31.25 kHz
+ *   &irefs 0 &mcgoutclk 2 0  FEI -> FEE -> FBE
+ *   &pll 4 30 0 &plls 1      FBE -> PBE (8 MHz / 4 * 30 = 60 MHz)
+ *   &mcgoutclk 0 0           PBE -> PEE
+ *
+ * Register addresses used below:
+ *   MCG_C1      0x40064000   MCG_C2      0x40064001   MCG_C4      0x40064003
+ *   MCG_C5      0x40064004   MCG_C6      0x40064005   MCG_SC      0x40064008
+ *   MCG_C7      0x4006400c   OSC_CR      0x40065000   OSC_DIV     0x40065002
+ *   RTC_CR      0x4003d010   SIM_SOPT1   0x40047000   SIM_SOPT2   0x40048004
+ *   SIM_SCGC4   0x40048034   SIM_SCGC5   0x40048038   SIM_SCGC6   0x4004803c
+ *   SIM_SCGC7   0x40048040   SIM_CLKDIV1 0x40048044   SIM_CLKDIV2 0x40048048
+ */
+
+&sim {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	/* ----------------------------------------------------------------- */
+	/* Root clock sources                                                */
+	/* ----------------------------------------------------------------- */
+
+	no_clock: no-clock {
+		/* Dummy node - indicates no clock source was selected */
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <0>;
+	};
+
+	slow_irc: slow-irc {
+		/* MCG slow internal reference clock (32 kHz IRC) */
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <32768>;
+	};
+
+	fast_irc: fast-irc {
+		/* MCG fast internal reference clock (4 MHz IRC) */
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <4000000>;
+	};
+
+	irc48m: irc48m {
+		/*
+		 * IRC48M internal oscillator (IRC48MCLK). Enabled by hardware
+		 * whenever it is selected by the MCG, SIM or USB.
+		 */
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <48000000>;
+
+		irc48m_clock: irc48m-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	lpo: lpo {
+		/* PMC 1 kHz low power oscillator */
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <1000>;
+
+		lpo_clock: lpo-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	usb_clkin: usb-clkin {
+		/* External USB_CLKIN pin */
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <0>;
+	};
+
+	osc0: osc0@40065000 {
+		/*
+		 * System oscillator (OSCCLK). Range, gain and input mode are
+		 * programmed into MCG_C2, and load capacitors into OSC_CR.
+		 */
+		compatible = "nxp,kinetis-osc";
+		#clock-cells = <1>;
+		/* OSC_CR */
+		reg = <0x40065000 0x1>;
+		/* External clock source (default 8 MHz) */
+		frequency = <8000000>;
+		mode = "external";
+	};
+
+	rtc_osc: rtc-osc@4003d010 {
+		/* RTC 32.768 kHz oscillator */
+		compatible = "nxp,kinetis-rtc-osc";
+		#clock-cells = <1>;
+		/* RTC_CR[OSCE] */
+		reg = <0x4003d010 0x4>;
+		frequency = <32768>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* RTC clocks                                                        */
+	/* ----------------------------------------------------------------- */
+
+	rtc_32k: rtc-32k@4003d010 {
+		/* RTC 32 kHz clock output to other peripherals (active low) */
+		compatible = "nxp,kinetis-rtc-clkout";
+		#clock-cells = <1>;
+		/* RTC_CR[CLKO] */
+		reg = <0x4003d010 0x4>;
+		offset = <0x9>;
+		input = <&rtc_osc>;
+	};
+
+	rtc_1hz: rtc-1hz {
+		/*
+		 * RTC 1 Hz clock, from the RTC prescaler. Only runs while the
+		 * RTC time counter is enabled. The specifier cell on rtc_osc is
+		 * not used by the fixed-factor-clock driver.
+		 */
+		compatible = "fixed-factor-clock";
+		#clock-cells = <0>;
+		clocks = <&rtc_osc 1>;
+		clock-div = <32768>;
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* MCG internal reference clocks                                     */
+	/* ----------------------------------------------------------------- */
+
+	fcrdiv: fcrdiv@40064008 {
+		/* MCG_SC[FCRDIV] - fast IRC divider */
+		compatible = "nxp,kinetis-mcg-fcrdiv";
+		#clock-cells = <1>;
+		reg = <0x40064008 0x1>;
+		input = <&fast_irc>;
+	};
+
+	ircs: ircs@40064001 {
+		/* MCG_C2[IRCS] - slow or fast IRC select (IRCSCLK) */
+		compatible = "nxp,kinetis-mcg-mux";
+		#clock-cells = <1>;
+		reg = <0x40064001 0x1>;
+		offset = <0x0>;
+		mux-type = "ircs";
+		input-sources = <&slow_irc &fcrdiv>;
+	};
+
+	mcgirclk: mcgirclk@40064000 {
+		/* MCG_C1[IRCLKEN] - MCGIRCLK enable */
+		compatible = "nxp,kinetis-clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40064000 0x1>;
+		offset = <0x1>;
+		input = <&ircs>;
+
+		mcgirclk_clock: mcgirclk-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* MCG external reference and FLL                                    */
+	/* ----------------------------------------------------------------- */
+
+	oscsel: oscsel@4006400c {
+		/*
+		 * MCG_C7[OSCSEL] - MCG external reference select (OSCSELCLK).
+		 * The RTC oscillator is taken after RTC_CR[CLKO], which gates
+		 * its output to other peripherals.
+		 */
+		compatible = "nxp,kinetis-mcg-mux";
+		#clock-cells = <1>;
+		reg = <0x4006400c 0x2>;
+		offset = <0x0>;
+		mux-type = "oscsel";
+		input-sources = <&osc0 &rtc_32k &irc48m &no_clock>;
+	};
+
+	frdiv: frdiv@40064000 {
+		/* MCG_C1[FRDIV] - FLL external reference divider */
+		compatible = "nxp,kinetis-mcg-frdiv";
+		#clock-cells = <1>;
+		reg = <0x40064000 0x1>;
+		input = <&oscsel>;
+	};
+
+	irefs: irefs@40064000 {
+		/* MCG_C1[IREFS] - FLL reference select (external or slow IRC) */
+		compatible = "nxp,kinetis-mcg-mux";
+		#clock-cells = <1>;
+		reg = <0x40064000 0x1>;
+		offset = <0x2>;
+		mux-type = "irefs";
+		input-sources = <&frdiv &slow_irc>;
+
+		/* MCG fixed frequency clock, used by the FlexTimers */
+		mcgffclk_clock: mcgffclk-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	fll: fll@40064003 {
+		/* MCG_C4[DRST_DRS, DMX32] - FLL (MCGFLLCLK) */
+		compatible = "nxp,kinetis-mcg-fll";
+		#clock-cells = <1>;
+		reg = <0x40064003 0x1>;
+		input = <&irefs>;
+
+		mcgfllclk_clock: mcgfllclk-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* MCG PLL                                                           */
+	/* ----------------------------------------------------------------- */
+
+	pll: pll@40064004 {
+		/*
+		 * MCG_C5[PRDIV0, PLLCLKEN0] and MCG_C6[VDIV0] - PLL (MCGPLLCLK).
+		 * #clock-cells encodes PRDIV, VDIV, and the PLLCLKEN0 enable.
+		 */
+		compatible = "nxp,kinetis-mcg-pll";
+		#clock-cells = <3>;
+		reg = <0x40064004 0x2>;
+		input = <&oscsel>;
+
+		mcgpllclk_clock: mcgpllclk-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* MCG output clock (MCGOUTCLK)                                      */
+	/* ----------------------------------------------------------------- */
+
+	plls: plls@40064005 {
+		/* MCG_C6[PLLS] - FLL or PLL select */
+		compatible = "nxp,kinetis-mcg-mux";
+		#clock-cells = <1>;
+		reg = <0x40064005 0x1>;
+		offset = <0x6>;
+		mux-type = "plls";
+		input-sources = <&fll &pll>;
+	};
+
+	mcgoutclk: mcgoutclk@40064000 {
+		/*
+		 * MCG_C1[CLKS] - MCGOUTCLK source select, and MCG_C2[LP]
+		 * low power bypass. #clock-cells encodes CLKS and LP.
+		 */
+		compatible = "nxp,kinetis-mcg-clks";
+		#clock-cells = <2>;
+		reg = <0x40064000 0x1>;
+		input-sources = <&plls &ircs &oscsel>;
+
+		mcgoutclk_clock: mcgoutclk-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* OSC external reference clocks                                     */
+	/* ----------------------------------------------------------------- */
+
+	oscerclk_undiv: oscerclk-undiv@40065000 {
+		/* OSC_CR[ERCLKEN] - OSCERCLK enable (OSCERCLK_UNDIV) */
+		compatible = "nxp,kinetis-clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40065000 0x1>;
+		offset = <0x7>;
+		input = <&osc0>;
+		/* ERCLKEN starts the oscillator, so wait for it in crystal mode */
+		wait-osc-init;
+
+		oscerclk_undiv_clock: oscerclk-undiv-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	oscerclk: oscerclk@40065002 {
+		/* OSC_DIV[ERPS] - OSCERCLK prescaler */
+		compatible = "clock-div";
+		#clock-cells = <1>;
+		reg = <0x40065002 0x2>;
+		offset = <0x6>;
+		div-type = "pow2";
+		reg-io-width = <1>;
+		input = <&oscerclk_undiv>;
+
+		oscerclk_clock: oscerclk-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* System clock dividers (SIM_CLKDIV1)                               */
+	/* ----------------------------------------------------------------- */
+
+	/*
+	 * SIM_CLKDIV1 ignores any write that leaves an OUTDIV2-4 divide value
+	 * more than 8 times OUTDIV1's, or not an integer multiple of it. Each
+	 * divider is written separately, so clock states must order the
+	 * divider settings such that every intermediate ratio is valid.
+	 */
+
+	outdiv1: outdiv1@40048044 {
+		/* SIM_CLKDIV1[OUTDIV1] - core/system clock divider */
+		compatible = "clock-div";
+		#clock-cells = <1>;
+		reg = <0x40048044 0x4>;
+		offset = <0x1c>;
+		div-type = "linear";
+		input = <&mcgoutclk>;
+
+		system_clock: system-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	outdiv2: outdiv2@40048044 {
+		/* SIM_CLKDIV1[OUTDIV2] - bus clock divider */
+		compatible = "clock-div";
+		#clock-cells = <1>;
+		reg = <0x40048044 0x4>;
+		offset = <0x18>;
+		div-type = "linear";
+		input = <&mcgoutclk>;
+
+		bus_clock: bus-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	outdiv3: outdiv3@40048044 {
+		/* SIM_CLKDIV1[OUTDIV3] - FlexBus clock divider */
+		compatible = "clock-div";
+		#clock-cells = <1>;
+		reg = <0x40048044 0x4>;
+		offset = <0x14>;
+		div-type = "linear";
+		input = <&mcgoutclk>;
+
+		flexbus_clock: flexbus-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	outdiv4: outdiv4@40048044 {
+		/* SIM_CLKDIV1[OUTDIV4] - flash clock divider */
+		compatible = "clock-div";
+		#clock-cells = <1>;
+		reg = <0x40048044 0x4>;
+		offset = <0x10>;
+		div-type = "linear";
+		input = <&mcgoutclk>;
+
+		flash_clock: flash-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* SIM clock selects (SIM_SOPT1, SIM_SOPT2)                          */
+	/* ----------------------------------------------------------------- */
+
+	pllfllsel: pllfllsel@40048004 {
+		/* SIM_SOPT2[PLLFLLSEL] - peripheral FLL/PLL/IRC48M select */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x40048004 0x2>;
+		offset = <0x10>;
+		input-sources = <&fll &pll &no_clock &irc48m>;
+
+		/* Also an I2S MCLK input option */
+		pllfllsel_clock: pllfllsel-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	usbfrac: usbfrac@40048048 {
+		/* SIM_CLKDIV2[USBFRAC, USBDIV] - USB fractional divider */
+		compatible = "nxp,kinetis-sim-frac-div";
+		#clock-cells = <2>;
+		reg = <0x40048048 0x4>;
+		input = <&pllfllsel>;
+	};
+
+	usbsrc: usbsrc@40048004 {
+		/* SIM_SOPT2[USBSRC] - USB 48 MHz clock select */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x40048004 0x1>;
+		offset = <0x12>;
+		input-sources = <&usb_clkin &usbfrac>;
+	};
+
+	lpuartsrc: lpuartsrc@40048004 {
+		/* SIM_SOPT2[LPUARTSRC] - LPUART0 clock select */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x40048004 0x2>;
+		offset = <0x1a>;
+		input-sources = <&no_clock &pllfllsel &oscerclk &mcgirclk>;
+	};
+
+	traceclksel: traceclksel@40048004 {
+		/* SIM_SOPT2[TRACECLKSEL] - debug trace clock select */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x40048004 0x1>;
+		offset = <0xc>;
+		input-sources = <&mcgoutclk &outdiv1>;
+
+		trace_clock: trace-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	clkoutsel: clkoutsel@40048004 {
+		/*
+		 * SIM_SOPT2[CLKOUTSEL] - CLKOUT pin select. Selection 0 is the
+		 * FlexBus CLKOUT, which is the OUTDIV3 FlexBus clock.
+		 */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x40048004 0x3>;
+		offset = <0x5>;
+		input-sources = <&outdiv3 &no_clock &outdiv4 &lpo &mcgirclk &rtc_32k
+				 &oscerclk &irc48m>;
+
+		clkout_clock: clkout-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	rtcclkoutsel: rtcclkoutsel@40048004 {
+		/* SIM_SOPT2[RTCCLKOUTSEL] - RTC_CLKOUT pin select */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x40048004 0x1>;
+		offset = <0x4>;
+		input-sources = <&rtc_1hz &rtc_32k>;
+
+		rtc_clkout_clock: rtc-clkout-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	osc32ksel: osc32ksel@40047000 {
+		/*
+		 * SIM_SOPT1[OSC32KSEL] - ERCLK32K select. The system
+		 * oscillator 32 kHz output (OSC32KCLK) requires
+		 * OSC_CR[ERCLKEN], so is taken after that gate.
+		 */
+		compatible = "clock-mux";
+		#clock-cells = <1>;
+		reg = <0x40047000 0x2>;
+		offset = <0x12>;
+		input-sources = <&oscerclk_undiv &no_clock &rtc_32k &lpo>;
+
+		erclk32k_clock: erclk32k-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* Peripheral clock gates (SIM_SCGC4)                                */
+	/* ----------------------------------------------------------------- */
+
+	ewm_en: ewm-en@40048034 {
+		/* SIM_SCGC4[EWM] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048034 0x1>;
+		offset = <0x1>;
+		input = <&outdiv2>;
+
+		ewm_clock: ewm-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	i2c0_en: i2c0-en@40048034 {
+		/* SIM_SCGC4[I2C0] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048034 0x1>;
+		offset = <0x6>;
+		input = <&outdiv2>;
+
+		i2c0_clock: i2c0-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	i2c1_en: i2c1-en@40048034 {
+		/* SIM_SCGC4[I2C1] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048034 0x1>;
+		offset = <0x7>;
+		input = <&outdiv2>;
+
+		i2c1_clock: i2c1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	uart0_en: uart0-en@40048034 {
+		/* SIM_SCGC4[UART0] - clocked from the core/system clock */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048034 0x1>;
+		offset = <0xa>;
+		input = <&outdiv1>;
+
+		uart0_clock: uart0-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	uart1_en: uart1-en@40048034 {
+		/* SIM_SCGC4[UART1] - clocked from the core/system clock */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048034 0x1>;
+		offset = <0xb>;
+		input = <&outdiv1>;
+
+		uart1_clock: uart1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	uart2_en: uart2-en@40048034 {
+		/* SIM_SCGC4[UART2] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048034 0x1>;
+		offset = <0xc>;
+		input = <&outdiv2>;
+
+		uart2_clock: uart2-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	usbotg_en: usbotg-en@40048034 {
+		/* SIM_SCGC4[USBOTG] - USB FS functional clock is the USB 48 MHz clock */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048034 0x1>;
+		offset = <0x12>;
+		input = <&usbsrc>;
+
+		usbotg_clock: usbotg-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	cmp_en: cmp-en@40048034 {
+		/* SIM_SCGC4[CMP] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048034 0x1>;
+		offset = <0x13>;
+		input = <&outdiv2>;
+
+		cmp_clock: cmp-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	vref_en: vref-en@40048034 {
+		/* SIM_SCGC4[VREF] - clocked from the flash clock */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048034 0x1>;
+		offset = <0x14>;
+		input = <&outdiv4>;
+
+		vref_clock: vref-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* Peripheral clock gates (SIM_SCGC5)                                */
+	/* ----------------------------------------------------------------- */
+
+	lptmr_en: lptmr-en@40048038 {
+		/* SIM_SCGC5[LPTMR] - clocked from the flash clock */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048038 0x1>;
+		offset = <0x0>;
+		input = <&outdiv4>;
+
+		lptmr_clock: lptmr-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	porta_en: porta-en@40048038 {
+		/* SIM_SCGC5[PORTA] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048038 0x1>;
+		offset = <0x9>;
+		input = <&outdiv2>;
+
+		porta_clock: porta-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	portb_en: portb-en@40048038 {
+		/* SIM_SCGC5[PORTB] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048038 0x1>;
+		offset = <0xa>;
+		input = <&outdiv2>;
+
+		portb_clock: portb-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	portc_en: portc-en@40048038 {
+		/* SIM_SCGC5[PORTC] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048038 0x1>;
+		offset = <0xb>;
+		input = <&outdiv2>;
+
+		portc_clock: portc-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	portd_en: portd-en@40048038 {
+		/* SIM_SCGC5[PORTD] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048038 0x1>;
+		offset = <0xc>;
+		input = <&outdiv2>;
+
+		portd_clock: portd-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	porte_en: porte-en@40048038 {
+		/* SIM_SCGC5[PORTE] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048038 0x1>;
+		offset = <0xd>;
+		input = <&outdiv2>;
+
+		porte_clock: porte-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* Peripheral clock gates (SIM_SCGC6)                                */
+	/* ----------------------------------------------------------------- */
+
+	ftf_en: ftf-en@4004803c {
+		/* SIM_SCGC6[FTF] - flash memory, clocked from the flash clock */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x0>;
+		input = <&outdiv4>;
+
+		ftf_clock: ftf-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	dmamux_en: dmamux-en@4004803c {
+		/* SIM_SCGC6[DMAMUX] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x1>;
+		input = <&outdiv2>;
+
+		dmamux_clock: dmamux-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	ftm3_en: ftm3-en@4004803c {
+		/* SIM_SCGC6[FTM3] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x6>;
+		input = <&outdiv2>;
+
+		ftm3_clock: ftm3-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	adc1_en: adc1-en@4004803c {
+		/* SIM_SCGC6[ADC1] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x7>;
+		input = <&outdiv2>;
+
+		adc1_clock: adc1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	dac1_en: dac1-en@4004803c {
+		/* SIM_SCGC6[DAC1] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x8>;
+		input = <&outdiv2>;
+
+		dac1_clock: dac1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	rnga_en: rnga-en@4004803c {
+		/* SIM_SCGC6[RNGA] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x9>;
+		input = <&outdiv2>;
+
+		rnga_clock: rnga-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	lpuart0_en: lpuart0-en@4004803c {
+		/* SIM_SCGC6[LPUART0] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0xa>;
+		input = <&lpuartsrc>;
+
+		lpuart0_clock: lpuart0-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	spi0_en: spi0-en@4004803c {
+		/* SIM_SCGC6[SPI0] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0xc>;
+		input = <&outdiv2>;
+
+		spi0_clock: spi0-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	spi1_en: spi1-en@4004803c {
+		/* SIM_SCGC6[SPI1] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0xd>;
+		input = <&outdiv2>;
+
+		spi1_clock: spi1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	i2s0_en: i2s0-en@4004803c {
+		/* SIM_SCGC6[I2S] - MCLK source is selected within the I2S */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0xf>;
+		input = <&outdiv2>;
+
+		i2s0_clock: i2s0-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	crc_en: crc-en@4004803c {
+		/* SIM_SCGC6[CRC] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x12>;
+		input = <&outdiv2>;
+
+		crc_clock: crc-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	pdb_en: pdb-en@4004803c {
+		/* SIM_SCGC6[PDB] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x16>;
+		input = <&outdiv2>;
+
+		pdb_clock: pdb-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	pit_en: pit-en@4004803c {
+		/* SIM_SCGC6[PIT] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x17>;
+		input = <&outdiv2>;
+
+		pit_clock: pit-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	ftm0_en: ftm0-en@4004803c {
+		/* SIM_SCGC6[FTM0] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x18>;
+		input = <&outdiv2>;
+
+		ftm0_clock: ftm0-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	ftm1_en: ftm1-en@4004803c {
+		/* SIM_SCGC6[FTM1] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x19>;
+		input = <&outdiv2>;
+
+		ftm1_clock: ftm1-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	ftm2_en: ftm2-en@4004803c {
+		/* SIM_SCGC6[FTM2] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x1a>;
+		input = <&outdiv2>;
+
+		ftm2_clock: ftm2-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	adc0_en: adc0-en@4004803c {
+		/* SIM_SCGC6[ADC0] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x1b>;
+		input = <&outdiv2>;
+
+		adc0_clock: adc0-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	rtc_en: rtc-en@4004803c {
+		/* SIM_SCGC6[RTC] - RTC register access, clocked from the flash clock */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x1d>;
+		input = <&outdiv4>;
+
+		rtc_clock: rtc-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	dac0_en: dac0-en@4004803c {
+		/* SIM_SCGC6[DAC0] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x4004803c 0x1>;
+		offset = <0x1f>;
+		input = <&outdiv2>;
+
+		dac0_clock: dac0-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	/* ----------------------------------------------------------------- */
+	/* Peripheral clock gates (SIM_SCGC7)                                */
+	/* ----------------------------------------------------------------- */
+
+	flexbus_en: flexbus-en@40048040 {
+		/* SIM_SCGC7[FLEXBUS] */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048040 0x1>;
+		offset = <0x0>;
+		input = <&outdiv3>;
+
+		flexbus_en_clock: flexbus-en-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+
+	dma_en: dma-en@40048040 {
+		/* SIM_SCGC7[DMA] - clocked from the core/system clock */
+		compatible = "clock-gate";
+		#clock-cells = <1>;
+		reg = <0x40048040 0x1>;
+		offset = <0x1>;
+		input = <&outdiv1>;
+
+		dma_clock: dma-clock {
+			compatible = "clock-output";
+			#clock-cells = <0>;
+		};
+	};
+};
