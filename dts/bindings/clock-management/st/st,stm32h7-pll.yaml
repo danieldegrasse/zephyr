@@ -1,0 +1,59 @@
+# Copyright 2026 Analog Devices Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  STM32H7 PLL (fractional VCO). Describes one of the three PLLs (PLL1/2/3)
+  on the STM32H7, each with a fractional-N VCO. The VCO output frequency is:
+
+    f_VCO = f_ref * (DIVN + 1 + FRACN / 2^13)
+
+  where f_ref is the input clock after the DIVMx prescaler.
+
+  Accepts five specifiers that configure the VCO:
+    [0] DIVN  - VCO multiplication factor (N)
+    [1] FRACN - Fractional divider value (0-8191)
+    [2] RGE   - Input frequency range selection
+    [3] VCOSEL - VCO output range (0 = wide 192-836 MHz, 1 = medium 150-420 MHz)
+    [4] Enable (0 = disable, nonzero = enable)
+
+compatible: "st,stm32h7-pll"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Two register ranges:
+        [0] PLLxDIVR and PLLxFRACR registers (8 bytes)
+        [1] RCC_CR register base (used for enable/ready bits and to derive
+            the PLLCFGR address at offset +0x2C)
+
+  enable-bit:
+    type: int
+    required: true
+    description: |
+      Bit offset of the PLL enable bit (e.g. PLL1ON) within the enable register.
+
+  fracen-bit:
+    type: int
+    required: true
+    description: |
+      Bit offset of the PLL fractional latch enable bit (e.g. PLL1FRACEN)
+      within the PLL configuration register.
+
+  input:
+    type: phandle
+    required: true
+    description: |
+      Clock node for the PLL reference input (after the DIVMx prescaler).
+
+  "#clock-cells":
+    const: 5
+
+clock-cells:
+  - divn
+  - fracn
+  - rge
+  - vcosel
+  - enable

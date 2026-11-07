@@ -267,6 +267,8 @@
 			compatible = "st,stm32-usart", "st,stm32-uart";
 			reg = <0x40013800 0x400>;
 			clocks = <&rcc STM32_CLOCK(APB2, 14)>;
+			clock-outputs = <&usart1_clock>;
+			clock-output-names = "default";
 			resets = <&rctl STM32_RESET(APB2, 14)>;
 			interrupts = <37 0>;
 			status = "disabled";
@@ -276,6 +278,8 @@
 			compatible = "st,stm32-usart", "st,stm32-uart";
 			reg = <0x40004400 0x400>;
 			clocks = <&rcc STM32_CLOCK(APB1, 17)>;
+			clock-outputs = <&usart1_clock>;
+			clock-output-names = "default";
 			resets = <&rctl STM32_RESET(APB1L, 17)>;
 			interrupts = <38 0>;
 			status = "disabled";
@@ -285,6 +289,8 @@
 			compatible = "st,stm32-lpuart", "st,stm32-uart";
 			reg = <0x40008000 0x400>;
 			clocks = <&rcc STM32_CLOCK(APB1_2, 0)>;
+			clock-outputs = <&lpuart1_clock>;
+			clock-output-names = "default";
 			resets = <&rctl STM32_RESET(APB1H, 0)>;
 			interrupts = <70 0>;
 			status = "disabled";
@@ -649,3 +655,5 @@
 &nvic {
 	arm,num-irq-priority-bits = <4>;
 };
+
+#include <st/l4/stm32l4_clocks.dtsi>

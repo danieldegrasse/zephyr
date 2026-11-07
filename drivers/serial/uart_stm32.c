@@ -49,6 +49,7 @@
 
 #include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
+
 LOG_MODULE_REGISTER(uart_stm32, CONFIG_UART_LOG_LEVEL);
 
 #if defined(CONFIG_STM32_HAL2)
@@ -248,6 +249,14 @@ static inline int uart_stm32_set_baudrate(const struct device *dev, uint32_t bau
 
 	uint32_t clock_rate;
 
+#ifdef CONFIG_CLOCK_MANAGEMENT
+	clock_rate = clock_management_get_rate(config->clock_data,
+					       config->clock_output);
+	if (clock_rate < 0) {
+		LOG_ERR("Failed to get clock rate");
+		return clock_rate;
+	}
+#else /* !CONFIG_CLOCK_MANAGEMENT */
 	/* Get clock rate */
 	if (IS_ENABLED(STM32_UART_DOMAIN_CLOCK_SUPPORT) && (config->pclk_len > 1)) {
 		int ret = clock_control_get_rate(config->clock,
@@ -266,6 +275,7 @@ static inline int uart_stm32_set_baudrate(const struct device *dev, uint32_t bau
 			return ret;
 		}
 	}
+#endif /* CONFIG_CLOCK_MANAGEMENT */
 
 #if HAS_LPUART
 	if (IS_LPUART_INSTANCE(usart)) {
@@ -2312,6 +2322,13 @@ static int uart_stm32_clocks_enable(const struct device *dev)
 	const struct uart_stm32_config *config = dev->config;
 	int err;
 
+#ifdef CONFIG_CLOCK_MANAGEMENT
+	err = clock_management_request_state(config->clock_data, config->clock_request);
+	if (err != 0) {
+		LOG_ERR("Could not enable (LP)UART clock");
+		return err;
+	}
+#else /* !CONFIG_CLOCK_MANAGEMENT */
 	/* enable clock */
 	err = clock_control_on(config->clock, (clock_control_subsys_t)&config->pclken[0]);
 	if (err != 0) {
@@ -2328,7 +2345,7 @@ static int uart_stm32_clocks_enable(const struct device *dev)
 			return err;
 		}
 	}
-
+#endif /* CONFIG_CLOCK_MANAGEMENT */
 	return 0;
 }
 
@@ -2530,7 +2547,11 @@ static int uart_stm32_pm_action(const struct device *dev, enum pm_device_action 
 		}
 
 		/* Enable bus clock */
+#ifdef CONFIG_CLOCK_MANAGEMENT
+		err = clock_management_on(config->clock_data, config->clock_output);
+#else /* !CONFIG_CLOCK_MANAGEMENT */
 		err = clock_control_on(config->clock, (clock_control_subsys_t)&config->pclken[0]);
+#endif
 		if (err < 0) {
 			LOG_ERR("Could not enable (LP)UART clock");
 			return err;
@@ -2562,7 +2583,11 @@ static int uart_stm32_pm_action(const struct device *dev, enum pm_device_action 
 	case PM_DEVICE_ACTION_SUSPEND:
 		uart_stm32_suspend_setup(dev);
 		/* Stop device clock. Note: fixed clocks are not handled yet. */
+#ifdef CONFIG_CLOCK_MANAGEMENT
+		err = clock_management_off(config->clock_data, config->clock_output);
+#else /* !CONFIG_CLOCK_MANAGEMENT */
 		err = clock_control_off(config->clock, (clock_control_subsys_t)&config->pclken[0]);
+#endif
 		if (err < 0) {
 			LOG_ERR("Could not disable (LP)UART clock");
 			return err;
@@ -2761,13 +2786,29 @@ static int uart_stm32_pm_action(const struct device *dev, enum pm_device_action 
 		" has unsupported stop bits configuration");
 #endif
 
+#ifdef CONFIG_CLOCK_MANAGEMENT
+#define STM32_UART_CLOCK_DEFINE(index)                                          \
+	CLOCK_MANAGEMENT_DT_INST_DEFINE(index)
+#define STM32_UART_CLOCK_INIT(index)                                            \
+	.clock_data = CLOCK_MANAGEMENT_DT_INST_GET(index),                      \
+	.clock_output = CLOCK_MANAGEMENT_DT_INST_GET_OUTPUT(index),             \
+	.clock_request = CLOCK_MANAGEMENT_DT_INST_GET_REQUEST(index, default),
+#else
+#define STM32_UART_CLOCK_DEFINE(index)                                          \
+	static const struct stm32_pclken pclken_##index[] =			\
+		STM32_DT_INST_CLOCKS(index);
+#define STM32_UART_CLOCK_INIT(index)                                            \
+	.clock = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE),		        \
+	.pclken = pclken_##index,                                               \
+	.pclk_len = DT_INST_NUM_CLOCKS(index),
+#endif
+
 #define STM32_UART_INIT(index)							\
 	STM32_UART_IRQ_HANDLER_DEFINE(index)					\
 										\
 	PINCTRL_DT_INST_DEFINE(index);						\
 										\
-	static const struct stm32_pclken pclken_##index[] =			\
-		STM32_DT_INST_CLOCKS(index);					\
+	STM32_UART_CLOCK_DEFINE(index);                                         \
 										\
 	static struct uart_config uart_cfg_##index = {				\
 		.baudrate = DT_INST_PROP(index, current_speed),			\
@@ -2780,11 +2821,9 @@ static int uart_stm32_pm_action(const struct device *dev, enum pm_device_action 
 	};									\
 										\
 	static const struct uart_stm32_config uart_stm32_cfg_##index = {	\
+		STM32_UART_CLOCK_INIT(index)                                    \
 		.usart = (USART_TypeDef *)DT_INST_REG_ADDR(index),		\
-		.clock = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE),		\
 		.reset = RESET_DT_SPEC_GET(DT_DRV_INST(index)),			\
-		.pclken = pclken_##index,					\
-		.pclk_len = DT_INST_NUM_CLOCKS(index),				\
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),			\
 		.single_wire = DT_INST_PROP(index, single_wire),		\
 		.tx_rx_swap = DT_INST_PROP(index, tx_rx_swap),			\

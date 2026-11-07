@@ -1,0 +1,53 @@
+# Copyright 2026 Analog Devices Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  STM32 external oscillator (crystal or bypass). Represents an external
+  clock source with an enable bit and a ready status bit. The default
+  frequency may be overridden by the board devicetree.
+
+  Accepts two specifiers:
+    [0] Enable state (0 = disable, nonzero = enable)
+    [1] Bypass mode (0 = crystal, 1 = external clock bypass)
+
+compatible: "st,stm32-osc"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Register address containing the enable and ready bits.
+
+  offset:
+    type: int
+    required: true
+    description: |
+      Bit offset of the oscillator enable bit (e.g. HSEON) within the register.
+
+  ready-offset:
+    type: int
+    required: true
+    description: |
+      Bit offset of the oscillator ready flag (e.g. HSERDY) within the register.
+
+  bypass-offset:
+    type: int
+    required: true
+    description: |
+      Bit offset of the oscillator bypass bit (e.g. HSEBYP) within the register.
+
+  frequency:
+    type: int
+    required: true
+    description: |
+      Default output frequency of this oscillator, in Hz.
+      Board-level devicetrees should override this to match the actual crystal.
+
+  "#clock-cells":
+    const: 2
+
+clock-cells:
+  - gate
+  - bypass

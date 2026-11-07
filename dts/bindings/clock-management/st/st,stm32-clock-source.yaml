@@ -1,0 +1,44 @@
+# Copyright 2026 Analog Devices Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  STM32 internal clock source (RC oscillator). Represents a fixed-frequency
+  on-chip oscillator with an enable bit and a ready status bit in a single
+  RCC register.
+
+  Accepts one specifier which controls the enable state:
+    0 = disable, nonzero = enable.
+
+compatible: "st,stm32-clock-source"
+
+include: [clock-node.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      Register address containing the enable and ready bits.
+
+  offset:
+    type: int
+    required: true
+    description: |
+      Bit offset of the oscillator enable bit (e.g. HSION) within the register.
+
+  ready-offset:
+    type: int
+    required: true
+    description: |
+      Bit offset of the oscillator ready flag (e.g. HSIRDY) within the register.
+
+  frequency:
+    type: int
+    required: true
+    description: |
+      Fixed output frequency of this oscillator, in Hz.
+
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - gate
