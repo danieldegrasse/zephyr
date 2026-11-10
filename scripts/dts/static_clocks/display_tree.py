@@ -9,6 +9,7 @@ import sys
 
 from common import *  # noqa: F403
 from common import ClockDriver
+from adi_max32 import *  # noqa: F403
 from nxp_syscon import *  # noqa: F403
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python-devicetree', 'src'))
