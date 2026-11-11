@@ -80,6 +80,8 @@ struct alif_clock_control_config {
 #define ALIF_CLOCK_50M_FREQ          MHZ(50)
 /* 100M_CLK, a fixed division of the system PLL output */
 #define ALIF_CLOCK_100M_FREQ         MHZ(100)
+/* 400M_CLK, a fixed division of the system PLL output */
+#define ALIF_CLOCK_400M_FREQ         MHZ(400)
 
 /*
  * Clock Configuration Field Extraction Macros
@@ -215,9 +217,10 @@ static mem_addr_t alif_get_clk_reg_addr(const struct device *dev, uint32_t clk_i
  * Returns the frequency of the clock represented by the given clock ID.
  *
  * @param clock_id Encoded clock ID from device tree
- * @return Clock frequency in Hz, or 0 if unknown
+ * @return clock frequency in Hz on success
+ * @return -ENOTSUP if clock rate can't be read
  */
-static uint32_t alif_get_clock_freq(uint32_t clock_id)
+static int alif_get_clock_freq(uint32_t clock_id)
 {
 	uint32_t parent_clk = ALIF_CLOCK_CFG_PARENT_CLK(clock_id);
 
@@ -236,6 +239,8 @@ static uint32_t alif_get_clock_freq(uint32_t clock_id)
 		return ALIF_CLOCK_50M_FREQ;
 	case ALIF_PARENT_CLK_100M:
 		return ALIF_CLOCK_100M_FREQ;
+	case ALIF_PARENT_CLK_400M:
+		return ALIF_CLOCK_400M_FREQ;
 	default:
 		__ASSERT(false, "Invalid parent clock: %u", parent_clk);
 		return 0;
@@ -336,11 +341,15 @@ static int alif_clock_control_get_rate(const struct device *dev,
 				uint32_t *rate)
 {
 	uint32_t clk_id = (uint32_t)sub_system;
+	int ret;
 
 	ARG_UNUSED(dev);
 
-	*rate = alif_get_clock_freq(clk_id);
-
+	ret = alif_get_clock_freq(clk_id);
+	if (ret < 0) {
+		return ret;
+	}
+	*rate = ret;
 	return 0;
 }
 

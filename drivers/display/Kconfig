@@ -101,6 +101,8 @@ source "drivers/display/Kconfig.stm32_ltdc"
 source "drivers/display/Kconfig.tr230s"
 source "drivers/display/Kconfig.uc81xx"
 source "drivers/display/Kconfig.waveshare_dsi2dpi"
+source "drivers/display/Kconfig.cdc200"
+source "drivers/display/Kconfig.mw405"
 # zephyr-keep-sorted-stop
 
 endif # DISPLAY

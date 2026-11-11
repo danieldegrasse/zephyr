@@ -116,6 +116,11 @@
 #define ALIF_PARENT_CLK_50M         0x5U
 /** 100 MHz clock (100M_CLK), the system PLL output divided by eight */
 #define ALIF_PARENT_CLK_100M        0x6U
+/** 400 MHz clock (400M_CLK), the system PLL output divided by two */
+#define ALIF_PARENT_CLK_400M        0x7U
+/** Gate only clock. Doesn't support parent query */
+#define ALIF_PARENT_GATE_ONLY        0x1F
+
 
 /** @} */
 
