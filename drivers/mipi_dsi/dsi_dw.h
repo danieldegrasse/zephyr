@@ -450,6 +450,7 @@ struct dsi_dw_config {
 	uint32_t irq;
 	uint32_t panel_max_lane_bw;
 	struct dpi_config dpi;
+	const struct device *mbox;
 #if DT_ANY_INST_HAS_PROP_STATUS_OKAY(clocks)
 	const struct device *clk_dev;
 	clock_control_subsys_t dsi_cid;

@@ -101,3 +101,8 @@ properties:
     description:
       The lane bandwidth that a panel supports. All the calculations for DPHY
       PLL should be limited to half of the above value for a panel.
+
+  seservice0:
+    type: phandle
+    required: true
+    description: Instance of the MBOX service 0.

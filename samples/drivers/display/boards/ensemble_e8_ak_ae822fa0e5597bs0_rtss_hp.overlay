@@ -17,11 +17,6 @@
 	};
 };
 
-/* Correct DTCM address to not sit over HEXSPI0 memory mirror */
-&dtcm {
-	reg = <0x21000000 0x100000>;
-};
-
 &cdc200 {
 	width = <480>;
 	height = <800>;
@@ -100,6 +95,7 @@
 
 &mipi_dsi {
 	status = "okay";
+	seservice0 = <&seservice0>;
 	mw405: mw405@0 {
 		status = "okay";
 		compatible = "focuslcds,mw405";
@@ -116,6 +112,10 @@
 };
 
 &gpio14 {
+	status = "okay";
+};
+
+&seservice0 {
 	status = "okay";
 };
 

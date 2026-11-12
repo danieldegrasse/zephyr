@@ -36,6 +36,8 @@ BUILD_ASSERT(CONFIG_MBOX_MHUV2_NUM_CHANS <= MHU2_CHANNEL_MAX,
 
 /** Timeout in microseconds for the ACCESS_READY handshake. */
 #define MHU2_ACCESS_READY_TIMEOUT_US 1000
+/** Timeout in microseconds for the STAT_CLEAR handshake. */
+#define MHU2_STAT_CLEAR_TIMEOUT_US 1000
 
 /** Receiver INT_EN.CHCOMB: enables the combined channel interrupt (MHUv2.1+). */
 #define MHU2_INT_EN_CHCOMB	BIT(2)
@@ -177,7 +179,8 @@ static void mhuv2_isr(const struct device *dev)
  *
  * @param[in] dev        MHUv2 device instance.
  * @param[in] channel_id Flattened doorbell ID (hw_channel * 32 + slot).
- * @param[in] msg        Must be NULL (signalling-only, no data payload).
+ * @param[in] msg        If provided, sent as the doorbell payload instead of
+ *                       slot index
  *
  * @retval 0         Doorbell sent successfully.
  * @retval -EINVAL   Invalid channel ID.
@@ -197,7 +200,7 @@ static int mhuv2_send(const struct device *dev, mbox_channel_id_t channel_id,
 		return -EINVAL;
 	}
 
-	if (msg != NULL) {
+	if (msg != NULL && msg->size > sizeof(uint32_t)) {
 		return -EMSGSIZE;
 	}
 
@@ -223,7 +226,19 @@ static int mhuv2_send(const struct device *dev, mbox_channel_id_t channel_id,
 		return -EBUSY;
 	}
 
-	send->channel[ch].stat_set = BIT(slot);
+	if (msg != NULL) {
+		send->channel[ch].stat_set = *(uint32_t *)msg->data;
+		/* Wait for host to ACK the message by clearing the corresponding STAT reg */
+		if (!WAIT_FOR((send->channel[ch].stat) == 0, MHU2_STAT_CLEAR_TIMEOUT_US,
+			      k_busy_wait(1))) {
+			LOG_ERR("STAT_CLEAR timeout on hw channel %u slot %u", ch, slot);
+			send->access_request = 0;
+			atomic_set(&data->send_busy, 0);
+			return -ETIMEDOUT;
+		}
+	} else {
+		send->channel[ch].stat_set = BIT(slot);
+	}
 
 	send->access_request = 0;
 	atomic_set(&data->send_busy, 0);
@@ -396,16 +411,20 @@ static DEVICE_API(mbox, mhuv2_driver_api) = {
 	.set_enabled = mhuv2_set_enabled,
 };
 
+#define MHUV2_IRQ_CONNECT(idx, inst)                                            \
+	IRQ_CONNECT(DT_INST_IRQN_BY_IDX(inst, idx),                             \
+		    DT_INST_IRQ_BY_IDX(inst, idx, priority),                    \
+		    mhuv2_isr,                                                  \
+		    DEVICE_DT_INST_GET(inst),                                   \
+		    0);                                                         \
+	irq_enable(DT_INST_IRQN_BY_IDX(inst, idx));
+
+
 #define MHUV2_INIT(n)								\
 										\
 static void mhuv2_irq_config_##n(const struct device *dev)			\
 {										\
-	IRQ_CONNECT(DT_INST_IRQN(n),						\
-		    DT_INST_IRQ(n, priority),					\
-		    mhuv2_isr,							\
-		    DEVICE_DT_INST_GET(n),					\
-		    0);								\
-	irq_enable(DT_INST_IRQN(n));						\
+	LISTIFY(DT_INST_NUM_IRQS(n), MHUV2_IRQ_CONNECT, (;), n)                 \
 }										\
 										\
 static const struct mhuv2_config mhuv2_cfg_##n = {				\

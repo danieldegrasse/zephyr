@@ -464,5 +464,37 @@
 			cfg-clk-frequency = <25000000>;
 			status = "okay";
 		};
+
+		seservice0: mhu@40040000 {
+			compatible = "arm,mhuv2";
+			reg = < 0x40040000 0x1000 >, < 0x40050000 0x1000 >;
+			reg-names = "recv", "send";
+			status = "disabled";
+			#mbox-cells = <1>;
+		};
+
+		seservice1: mhu@40060000 {
+			compatible = "arm,mhuv2";
+			reg = < 0x40060000 0x1000 >, < 0x40070000 0x1000 >;
+			reg-names = "recv", "send";
+			status = "disabled";
+			#mbox-cells = <1>;
+		};
+
+		rtsshp_rtsshe_mhu0: mhu@40080000 {
+			compatible = "arm,mhuv2";
+			reg = < 0x40080000 0x1000 >, < 0x40090000 0x1000 >;
+			reg-names = "recv", "send";
+			status = "disabled";
+			#mbox-cells = <1>;
+		};
+
+		rtsshp_rtsshe_mhu1: mhu@400a0000 {
+			compatible = "arm,mhuv2";
+			reg = < 0x400A0000 0x1000 >, < 0x400B0000 0x1000 >;
+			reg-names = "recv", "send";
+			status = "disabled";
+			#mbox-cells = <1>;
+		};
 	};
 };

@@ -3,10 +3,13 @@
 
 if(CONFIG_SOC_AE822FA0E5597BS0_RTSS_HP)
   board_runner_args(jlink "--device=AE822FA0E5597BS0_M55_HP" "--speed=4000")
+  board_runner_args(alif_flash "--device=AE822FA0E5597BS0_HP")
 endif()
 
 if(CONFIG_SOC_AE822FA0E5597BS0_RTSS_HE)
   board_runner_args(jlink "--device=AE822FA0E5597BS0_M55_HE" "--speed=4000")
+  board_runner_args(alif_flash "--device=AE822FA0E5597BS0_HE")
 endif()
 
+include(${ZEPHYR_BASE}/boards/common/alif_flash.board.cmake)
 include(${ZEPHYR_BASE}/boards/common/jlink.board.cmake)

@@ -9,5 +9,6 @@ config MIPI_DSI_DW
 	depends on DT_HAS_SNPS_DESIGNWARE_DSI_ENABLED
 	depends on DT_HAS_SNPS_DESIGNWARE_DPHY_ENABLED
 	select MIPI_DPHY
+	select MBOX
 	help
 	  Enable Alif MIPI DSI Host controller driver

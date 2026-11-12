@@ -13,6 +13,9 @@
 #include <zephyr/drivers/mipi_dsi.h>
 #include <zephyr/drivers/mipi_dsi/dsi_dw.h>
 #include <zephyr/drivers/mipi_dphy/dphy_dw.h>
+#include <zephyr/drivers/mbox.h>
+#include <zephyr/cache.h>
+#include <zephyr/sys/barrier.h>
 #include "dsi_dw.h"
 
 LOG_MODULE_REGISTER(dsi_dw, CONFIG_MIPI_DSI_LOG_LEVEL);
@@ -1202,6 +1205,94 @@ static int dsi_dw_enable_clocks(const struct device *dev)
 }
 #endif /* DT_ANY_INST_HAS_PROP_STATUS_OKAY(clocks) */
 
+typedef struct {
+	volatile uint16_t hdr_service_id; /* Requested Service ID */
+	volatile uint16_t hdr_flags;      /* Request flags */
+	volatile uint16_t hdr_error_code; /* Transport layer error code */
+	volatile uint16_t hdr_padding;
+} service_header_t;
+
+typedef struct {
+	service_header_t header;
+	volatile uint32_t send_power_domains;
+	volatile uint32_t send_dcdc_voltage;
+	volatile uint32_t send_dcdc_mode;
+	volatile uint32_t send_aon_clk_src;
+	volatile uint32_t send_run_clk_src;
+	volatile uint32_t send_cpu_clk_freq;
+	volatile uint32_t send_scaled_clk_freq;
+	volatile uint32_t send_memory_blocks;
+	volatile uint32_t send_ip_clock_gating;
+	volatile uint32_t send_phy_pwr_gating;
+	volatile uint32_t send_vdd_ioflex_3V3;
+	volatile int      resp_error_code;
+} aipm_set_run_profile_svc_t;
+typedef struct {
+	service_header_t header;
+	volatile uint32_t send_setting_type;
+	volatile uint32_t value;
+	volatile uint32_t resp_error_code;
+} clock_setting_svc_t;
+
+#define SERVICE_POWER_SET_RUN_REQ_ID 311
+#define SERVICE_CLOCK_SETTING_GET_REQ_ID 717
+
+static uint8_t svc_svc_mem[CONFIG_DCACHE_LINE_SIZE * 16] __aligned(CONFIG_DCACHE_LINE_SIZE);
+
+static int mbox_setup_run_profile(const struct device *dev)
+{
+	const struct dsi_dw_config *config = dev->config;
+	const struct device *mbox = config->mbox;
+	struct mbox_msg msg;
+	int ret;
+	mem_addr_t msg_data = ((mem_addr_t)svc_svc_mem + 0x30800000);
+	aipm_set_run_profile_svc_t *run_profile = (aipm_set_run_profile_svc_t *)svc_svc_mem;
+	clock_setting_svc_t *clock_setting = (clock_setting_svc_t *)svc_svc_mem;
+
+	msg.data = &msg_data;
+	msg.size = sizeof(msg_data);
+
+	if (!device_is_ready(mbox)) {
+		LOG_ERR("MBOX device not ready");
+		return -ENODEV;
+	}
+
+	/* First, let's try to read frequency of SE clock */
+	memset(clock_setting, 0, sizeof(*clock_setting));
+	clock_setting->header.hdr_service_id = SERVICE_CLOCK_SETTING_GET_REQ_ID;
+	clock_setting->send_setting_type = 0x5;
+	barrier_dmem_fence_full();
+	sys_cache_data_flush_range(svc_svc_mem, sizeof(svc_svc_mem));
+	ret = mbox_send(mbox, 0, &msg);
+	if (ret) {
+		LOG_ERR("Failed to send clock setting request to MBOX (%d)", ret);
+		return ret;
+	}
+	sys_cache_data_invd_range(svc_svc_mem, sizeof(svc_svc_mem));
+	printk("Clock setting response %d\n", clock_setting->value);
+
+	/* Issue the run mode configuration to the MBOX */
+	run_profile->header.hdr_service_id = SERVICE_POWER_SET_RUN_REQ_ID;
+	run_profile->send_aon_clk_src = 1;
+	run_profile->send_run_clk_src = 2;
+	run_profile->send_cpu_clk_freq = 1;
+	run_profile->send_scaled_clk_freq = 0;
+	run_profile->send_dcdc_mode = 0x3;
+	run_profile->send_dcdc_voltage = 0x339;
+	run_profile->send_memory_blocks = 0x8003;
+	run_profile->send_ip_clock_gating = 0xb00;
+	run_profile->send_phy_pwr_gating = 0x1d;
+	run_profile->send_power_domains = 0x144;
+	run_profile->send_vdd_ioflex_3V3 = 0x1;
+
+	ret = mbox_send(mbox, 0, &msg);
+	if (ret) {
+		LOG_ERR("Failed to send run profile to MBOX (%d)", ret);
+		return ret;
+	}
+	return 0;
+}
+
 static int dsi_dw_init(const struct device *dev)
 {
 	const struct dsi_dw_config *config = dev->config;
@@ -1209,6 +1300,9 @@ static int dsi_dw_init(const struct device *dev)
 	int ret = 0;
 
 	DEVICE_MMIO_MAP(dev, K_MEM_CACHE_NONE);
+
+	// Hack- setup the MBOX run profile here
+	mbox_setup_run_profile(dev);
 
 #if DT_ANY_INST_HAS_PROP_STATUS_OKAY(clocks)
 	ret = dsi_dw_enable_clocks(dev);
@@ -1348,6 +1442,7 @@ static int dsi_dw_pm_action(const struct device *dev, enum pm_device_action acti
 		.tx_dphy = DEVICE_DT_GET(DT_INST_PHANDLE(i, phy_if)),                              \
 		.irq = DT_INST_IRQN(i),								\
 		.irq_config_func = dsi_dw_config_func_##i,					\
+		.mbox = DEVICE_DT_GET(DT_INST_PHANDLE(i, seservice0)),                          \
 												\
 		.dpi = {									\
 			.polarity = COND_CODE_0(DT_PROP(DT_NODELABEL(DT_INST_STRING_TOKEN(i, cdc_if_label)), \
