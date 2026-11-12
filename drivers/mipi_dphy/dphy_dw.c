@@ -760,6 +760,22 @@ static int dphy_dw_enable_clocks(const struct device *dev)
 
 }
 
+// HACK!
+/* CGU registers. */
+#define CGU_BASE                                0x1A602000
+#define CGU_PLL_CLK_SEL                         (CGU_BASE + 0x8)
+#define CGU_CLK_ENA                             (CGU_BASE + 0x14)
+
+static int app_board_early_init(void)
+{
+	/* Enable HFOSC (38.4 MHz) and CFG (100 MHz) clock. */
+	sys_set_bits(CGU_CLK_ENA, BIT(21) | BIT(23));
+
+	return 0;
+}
+
+SYS_INIT(app_board_early_init, PRE_KERNEL_1, 46);
+
 static int dphy_dw_init(const struct device *dev)
 {
 	const struct dphy_dw_config *config = dev->config;

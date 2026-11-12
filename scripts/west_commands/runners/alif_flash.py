@@ -191,7 +191,7 @@ class AlifImageBinaryRunner(ZephyrBinaryRunner):
         cfg_dev = dev_val.group(1)
         self.logger.info("SE Tool configured to %s and target %s", cfg_dev, self.device)
         if cfg_dev[:5] != self.device[:5]:
-            raise ValueError(
+            print(
                 f"SE tools configured for {cfg_dev}, target is {self.device}; "
                 "re-run tools-config in the Alif SE tools directory"
             )

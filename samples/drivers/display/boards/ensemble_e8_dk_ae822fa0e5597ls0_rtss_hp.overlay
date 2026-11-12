@@ -59,6 +59,8 @@
 	pinctrl-0 = <&pinctrl_cdc200>;
 	pinctrl-names = "default";
 	status = "okay";
+	panel-dev = <&mw405>;
+	dsi = <&mipi_dsi>;
 };
 
 &pinctrl {
@@ -118,6 +120,8 @@
 };
 
 // TODO: we need to power these PHYS
+// TODO: maybe not? I think the SE services call indicates these PHYs
+// *can* be powered down, not that they *must* be.
 /*
 &aipm_run_default {
 	phy-pwr-gating = <(ALIF_PHY_GATE_LDO_MASK |

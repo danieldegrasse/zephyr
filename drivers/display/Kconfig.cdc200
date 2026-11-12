@@ -12,3 +12,11 @@ config CDC200
 
 config FB_USES_DTCM_REGION
 	bool "CDC200 uses DTCM region for buffers"
+
+config CDC200_INIT_PRIORITY
+	int "CDC200 initialization priority"
+	default 95
+	depends on CDC200
+	help
+	  Set the initialization priority for the CDC200 driver. Should be
+	  later than the DSI driver, so that we can move DSI to video mode

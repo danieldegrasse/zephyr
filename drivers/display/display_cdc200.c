@@ -17,6 +17,7 @@
 #include "display_cdc200.h"
 #include <zephyr/cache.h>
 #include <zephyr/linker/devicetree_regions.h>
+#include <zephyr/drivers/mipi_dsi/dsi_dw.h>
 
 LOG_MODULE_REGISTER(CDC200, CONFIG_DISPLAY_LOG_LEVEL);
 
@@ -391,20 +392,16 @@ int cdc200_setup_registers(const struct device *dev)
 /* Generic APIs */
 static int cdc200_blanking_on(const struct device *dev)
 {
-	/*
-	 * Disable the Backlight GPIO here.
-	 * Not available with parallel display.
-	 */
-	return -ENOTSUP;
+	const struct cdc200_config *config = dev->config;
+
+	return display_blanking_on(config->panel_dev);
 }
 
 static int cdc200_blanking_off(const struct device *dev)
 {
-	/*
-	 * Enable the Backlight GPIO here.
-	 * Not available with parallel display.
-	 */
-	return -ENOTSUP;
+	const struct cdc200_config *config = dev->config;
+
+	return display_blanking_off(config->panel_dev);
 }
 
 int cdc200_generic_write(const struct device *dev, const uint16_t x, const uint16_t y,
@@ -849,6 +846,12 @@ static int cdc200_init(const struct device *dev)
 		return ret;
 	}
 
+	/* Enable controller */
+	cdc200_set_enable(dev, true);
+
+	/* Move DSI to video mode */
+	dsi_dw_set_mode(config->dsi, DSI_DW_VIDEO_MODE);
+
 	/* Install ISR handler. */
 	config->irq_config_func(dev);
 
@@ -1180,6 +1183,8 @@ static int cdc200_pm_action(const struct device *dev, enum pm_device_action acti
 		.irq_config_func = cdc200_config_func_##i,                                         \
 		.pcfg = CDC200_PINCTRL_GET(i),                                                     \
 		.bg_color = DT_INST_PROP(i, bg_color),                                             \
+		.panel_dev = DEVICE_DT_GET(DT_INST_PHANDLE(i, panel_dev)),                         \
+		.dsi = DEVICE_DT_GET(DT_INST_PHANDLE(i, dsi)),                                     \
                                                                                                    \
 		CDC200_GET_CLK(i)                                                                  \
                                                                                                    \
@@ -1267,7 +1272,7 @@ static int cdc200_pm_action(const struct device *dev, enum pm_device_action acti
                                                                                                    \
 	IF_ENABLED(CONFIG_PM_DEVICE, (PM_DEVICE_DT_INST_DEFINE(i, cdc200_pm_action);))             \
 	DEVICE_DT_INST_DEFINE(i, cdc200_init, PM_DEVICE_DT_INST_GET(i), &data##i, &config##i,      \
-			      POST_KERNEL, CONFIG_DISPLAY_INIT_PRIORITY, &cdc200_display_api);     \
+			      POST_KERNEL, CONFIG_CDC200_INIT_PRIORITY, &cdc200_display_api);     \
                                                                                                    \
 	static void cdc200_config_func_##i(const struct device *dev)                               \
 	{                                                                                          \

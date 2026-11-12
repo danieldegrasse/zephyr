@@ -11,10 +11,10 @@ properties:
   interrupts:
     required: true
 
-  cdc-if:
-    type: phandle
+  cdc-if-label:
+    type: string
     required: true
-    description: Instance of CDC200 peripheral
+    description: Nodelabel for instance of CDC200 peripheral
 
   phy-if:
     type: phandle-array

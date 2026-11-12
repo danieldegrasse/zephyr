@@ -311,6 +311,8 @@ struct cdc200_config {
 
 	struct cdc200_panel_config panel_cfg;
 	struct cdc200_layer_config layer[CDC_LAYER_MAX];
+	const struct device *panel_dev;
+	const struct device *dsi;
 
 #if DT_ANY_INST_HAS_PROP_STATUS_OKAY(clocks)
 	const struct device *clk_dev;

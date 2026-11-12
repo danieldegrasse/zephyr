@@ -1350,15 +1350,15 @@ static int dsi_dw_pm_action(const struct device *dev, enum pm_device_action acti
 		.irq_config_func = dsi_dw_config_func_##i,					\
 												\
 		.dpi = {									\
-			.polarity = COND_CODE_0(DT_INST_PROP_BY_PHANDLE(i, cdc_if,		\
+			.polarity = COND_CODE_0(DT_PROP(DT_NODELABEL(DT_INST_STRING_TOKEN(i, cdc_if_label)), \
 							hsync_active),				\
 						    DSI_DPI_CFG_POL_HSYNC_ACTIVE_LOW,		\
 						    (0)) |					\
-				    COND_CODE_0(DT_INST_PROP_BY_PHANDLE(i, cdc_if,		\
+				    COND_CODE_0(DT_PROP(DT_NODELABEL(DT_INST_STRING_TOKEN(i, cdc_if_label)), \
 							vsync_active),				\
 						    DSI_DPI_CFG_POL_VSYNC_ACTIVE_LOW,		\
 						    (0)) |					\
-				    COND_CODE_0(DT_INST_PROP_BY_PHANDLE(i, cdc_if, de_active),	\
+				    COND_CODE_0(DT_PROP(DT_NODELABEL(DT_INST_STRING_TOKEN(i, cdc_if_label)), de_active), \
 						    DSI_DPI_CFG_POL_DATAEN_ACTIVE_LOW,		\
 						    (0)) |					\
 				    COND_CODE_0(DT_INST_PROP(i, dpi_colorm_active),		\

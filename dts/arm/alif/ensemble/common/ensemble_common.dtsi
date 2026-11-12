@@ -432,7 +432,7 @@
 			compatible = "snps,designware-dsi";
 			reg = <0x49032000 0x1000>;
 			interrupts = <343 0>;
-			cdc-if = <&cdc200>;
+			cdc-if-label = "cdc200";
 			phy-if = <&dphy 1>;
 
 			clocks = <&clockctrl ALIF_DSI_CLK>, <&clockctrl ALIF_CDC200_PIX_SYST_ACLK>,
