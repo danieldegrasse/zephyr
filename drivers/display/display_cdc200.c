@@ -744,7 +744,7 @@ static int cdc200_setup_pixel_clock(const struct device *dev)
 	struct cdc200_data *data = dev->data;
 	int ret;
 
-	ret = clock_control_configure(config->clk_dev, config->pix_cid, NULL);
+	ret = clock_control_on(config->clk_dev, config->pix_cid);
 	if (ret) {
 		LOG_ERR("Pixel-CLK source configuration failed! ret - %d", ret);
 		return ret;
@@ -754,12 +754,6 @@ static int cdc200_setup_pixel_clock(const struct device *dev)
 			(clock_control_subsys_rate_t)data->clk_freq);
 	if (ret) {
 		LOG_ERR("Pixel-CLK set frequency failed! ret - %d", ret);
-		return ret;
-	}
-
-	ret = clock_control_on(config->clk_dev, config->pix_cid);
-	if (ret) {
-		LOG_ERR("Enable Pixel-CLK failed! ret - %d", ret);
 		return ret;
 	}
 
@@ -821,15 +815,6 @@ static int cdc200_init(const struct device *dev)
 	k_sem_init(&data->vsync_sem, 0, 1);
 
 #if DT_ANY_INST_HAS_PROP_STATUS_OKAY(clocks)
-	if (!cdc200_pixel_clock_valid(dev)) {
-		LOG_ERR("Incorrect Pixel Clock value supplied in DTS.");
-		return -EINVAL;
-	}
-	ret = cdc200_setup_clocks(dev);
-	if (ret) {
-		LOG_ERR("CDC200 Clock enable failed! Exiting!");
-		return ret;
-	}
 #endif /* DT_ANY_INST_HAS_PROP_STATUS_OKAY(clocks) */
 
 #if !defined(CONFIG_MIPI_DSI)
@@ -850,7 +835,11 @@ static int cdc200_init(const struct device *dev)
 	cdc200_set_enable(dev, true);
 
 	/* Move DSI to video mode */
-	dsi_dw_set_mode(config->dsi, DSI_DW_VIDEO_MODE);
+	ret = dsi_dw_set_mode(config->dsi, DSI_DW_VIDEO_MODE);
+	if (ret) {
+		LOG_ERR("Failed to set DSI to video mode");
+		return ret;
+	}
 
 	/* Install ISR handler. */
 	config->irq_config_func(dev);
@@ -1272,7 +1261,25 @@ static int cdc200_pm_action(const struct device *dev, enum pm_device_action acti
                                                                                                    \
 	IF_ENABLED(CONFIG_PM_DEVICE, (PM_DEVICE_DT_INST_DEFINE(i, cdc200_pm_action);))             \
 	DEVICE_DT_INST_DEFINE(i, cdc200_init, PM_DEVICE_DT_INST_GET(i), &data##i, &config##i,      \
-			      POST_KERNEL, CONFIG_CDC200_INIT_PRIORITY, &cdc200_display_api);     \
+			      POST_KERNEL, CONFIG_CDC200_INIT_PRIORITY, &cdc200_display_api);      \
+												   \
+	static int cdc200_clocks_##i(void)                                                         \
+	{                                                                                          \
+		const struct device *dev = DEVICE_DT_INST_GET(i);                                  \
+		int ret;                                                                           \
+												   \
+		if (!cdc200_pixel_clock_valid(dev)) {                                              \
+			LOG_ERR("Incorrect Pixel Clock value supplied in DTS.");                   \
+			return -EINVAL;                                                            \
+		}                                                                                  \
+		ret = cdc200_setup_clocks(dev);                                                    \
+		if (ret) {                                                                         \
+			LOG_ERR("CDC200 Clock enable failed! Exiting!");                           \
+			return ret;                                                                \
+		}                                                                                  \
+		return 0;                                                                          \
+	}                                                                                          \
+	SYS_INIT(cdc200_clocks_##i, POST_KERNEL, CONFIG_DISPLAY_INIT_PRIORITY);                    \
                                                                                                    \
 	static void cdc200_config_func_##i(const struct device *dev)                               \
 	{                                                                                          \
