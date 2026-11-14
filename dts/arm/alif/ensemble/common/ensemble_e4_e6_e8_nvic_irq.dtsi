@@ -133,3 +133,39 @@
 	interrupt-parent = <&nvic>;
 	interrupts = <148 0>;
 };
+
+&apss_mhu0 {
+	interrupt-parent = <&nvic>;
+	interrupts = <33 0>, <34 0>;
+	interrupt-names = "recv", "send";
+};
+
+&apss_mhu1 {
+	interrupt-parent = <&nvic>;
+	interrupts = <35 0>, <36 0>;
+	interrupt-names = "recv", "send";
+};
+
+&secpu_mhu0 {
+	interrupt-parent = <&nvic>;
+	interrupts = <37 0>, <38 0>;
+	interrupt-names = "recv", "send";
+};
+
+&secpu_mhu1 {
+	interrupt-parent = <&nvic>;
+	interrupts = <39 0>, <40 0>;
+	interrupt-names = "recv", "send";
+};
+
+&rtssx_mhu0 {
+	interrupt-parent = <&nvic>;
+	interrupts = <41 0>, <42 0>;
+	interrupt-names = "recv", "send";
+};
+
+&rtssx_mhu1 {
+	interrupt-parent = <&nvic>;
+	interrupts = <43 0>, <44 0>;
+	interrupt-names = "recv", "send";
+};

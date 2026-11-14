@@ -117,6 +117,60 @@
 			reg-names = "pinctrl", "lpgpio_pinctrl";
 		};
 
+		apss_mhu0: mhu@40000000 {
+			compatible = "arm,mhuv2";
+			reg = <0x40000000 0x1000>, <0x40010000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		apss_mhu1: mhu@40020000 {
+			compatible = "arm,mhuv2";
+			reg = <0x40020000 0x1000>, <0x40030000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		secpu_mhu0: mhu@40040000 {
+			compatible = "arm,mhuv2";
+			reg = <0x40040000 0x1000>, <0x40050000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			/* Used by SE services, so always enabled */
+			status = "okay";
+		};
+
+		secpu_mhu1: mhu@40060000 {
+			compatible = "arm,mhuv2";
+			reg = <0x40060000 0x1000>, <0x40070000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		/*
+		 * These MHU instances route from the RTSS-HP to RTSS-HE on
+		 * the RTSS-HP, and from the RTSS-HE to RTSS-HP on the
+		 * RTSS-HE.
+		 */
+		rtssx_mhu0: mhu@40080000 {
+			compatible = "arm,mhuv2";
+			reg = <0x40080000 0x1000>, <0x40090000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		rtssx_mhu1: mhu@400a0000 {
+			compatible = "arm,mhuv2";
+			reg = <0x400a0000 0x1000>, <0x400b0000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
 		/*
 		 * LPTIMER channels. All channels share one 4 KB register block
 		 * at 0x42001000, each occupying a 0x14 byte slice of it.

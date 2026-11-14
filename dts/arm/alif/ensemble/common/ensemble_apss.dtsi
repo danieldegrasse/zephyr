@@ -39,5 +39,82 @@
 			#interrupt-cells = <4>;
 			status = "okay";
 		};
+
+		/* MHU instances have different address mapping on APSS */
+		/delete-node/ mhu@40000000;
+		/delete-node/ mhu@40020000;
+		/delete-node/ mhu@40040000;
+		/delete-node/ mhu@40060000;
+		/delete-node/ mhu@40080000;
+		/delete-node/ mhu@400a0000;
+
+		rtsshp_mhu0: mhu@1b010000 {
+			compatible = "arm,mhuv2";
+			reg = <0x1b010000 0x1000>, <0x1b000000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		rtsshp_mhu1: mhu@1b030000 {
+			compatible = "arm,mhuv2";
+			reg = <0x1b030000 0x1000>, <0x1b020000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		rtsshe_mhu0: mhu@1b050000 {
+			compatible = "arm,mhuv2";
+			reg = <0x1b050000 0x1000>, <0x1b040000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		rtsshe_mhu1: mhu@1b070000 {
+			compatible = "arm,mhuv2";
+			reg = <0x1b070000 0x1000>, <0x1b060000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		secpu_mhu0: mhu@1b810000 {
+			compatible = "arm,mhuv2";
+			reg = <0x1b810000 0x1000>, <0x1b800000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		secpu_mhu1: mhu@1b830000 {
+			compatible = "arm,mhuv2";
+			reg = <0x1b830000 0x1000>, <0x1b820000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		/*
+		 * These MHU instances route from the RTSS-HP to RTSS-HE on
+		 * the RTSS-HP, and from the RTSS-HE to RTSS-HP on the
+		 * RTSS-HE.
+		 */
+		rtssx_mhu0: mhu@40080000 {
+			compatible = "arm,mhuv2";
+			reg = <0x40080000 0x1000>, <0x40090000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		rtssx_mhu1: mhu@400a0000 {
+			compatible = "arm,mhuv2";
+			reg = <0x400a0000 0x1000>, <0x400b0000 0x1000>;
+			reg-names = "recv", "send";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
 	};
 };
