@@ -26,7 +26,15 @@ properties:
 
   interrupts:
     required: true
-    description: Single interrupt for the receive side.
+    description: |
+      Single interrupt for the receive side, or multiple interrupts for send
+      and receive sides.
+
+  interrupt-names:
+    description: |
+      If present, must contain "send" and "recv", identifying the interrupts for
+      the PBX (send) and MBX (recv) sides, respectively.
+
 
 mbox-cells:
   - channel

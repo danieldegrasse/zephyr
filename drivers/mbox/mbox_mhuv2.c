@@ -47,15 +47,28 @@ BUILD_ASSERT(CONFIG_MBOX_MHUV2_NUM_CHANS <= MHU2_CHANNEL_MAX,
 /** Receiver INT_EN.CHCOMB: enables the combined channel interrupt (MHUv2.1+). */
 #define MHU2_INT_EN_CHCOMB	BIT(2)
 
+/* Transmit channel interrupt status bit: indicates a write to MBX side stat_clear. */
+#define MHU2_CH_CLR BIT(0)
+
 /** AIDR.ARCH_MINOR_REV field: 0 = MHUv2.0, 1 = MHUv2.1. */
 #define MHU2_AIDR_ARCH_MINOR_MASK 0xFU
+
+#define MHU2_INST_SEND_INTERRUPT_ENABLED(inst) \
+	DT_INST_IRQ_HAS_NAME(inst, send) |
+
+/* Should we use interrupts for the PBX side? */
+#define MHU2_SEND_INTERRUPT_ENABLED \
+	(DT_INST_FOREACH_STATUS_OKAY(MHU2_INST_SEND_INTERRUPT_ENABLED) 0)
 
 /** @brief PBX (Postbox / sender) per-channel registers, 0x20 bytes each. */
 struct mhuv2_send_channel_reg {
 	volatile const uint32_t stat;
 	uint32_t reserved0[2];
 	volatile uint32_t stat_set;
-	uint32_t reserved1[4];
+	volatile uint32_t int_stat;
+	volatile uint32_t int_clr;
+	volatile uint32_t int_en;
+	uint32_t reserved1[1];
 };
 
 /** @brief PBX (Postbox / sender) top-level register frame. */
@@ -123,6 +136,7 @@ struct mhuv2_data {
 	uint32_t num_channels;
 	uint32_t num_doorbells;
 	atomic_t send_busy;
+	struct k_sem *tx_signalled;
 };
 
 /* Required by DEVICE_MMIO_NAMED_* macros */
@@ -150,7 +164,7 @@ static inline uint32_t mhuv2_slot_of(mbox_channel_id_t id)
  *
  * @param[in] dev MHUv2 device instance.
  */
-static void mhuv2_isr(const struct device *dev)
+static void mhuv2_rx_isr(const struct device *dev)
 {
 	struct mhuv2_recv_reg *recv = MHUV2_RECV(dev);
 	struct mhuv2_data *data = dev->data;
@@ -183,6 +197,29 @@ static void mhuv2_isr(const struct device *dev)
 			}
 
 			recv_ch->stat_clear = stat;
+		}
+	}
+}
+
+/**
+ * @brief MHUv2 combined transmit interrupt handler.
+ *
+ * Handles the channel clear interrupt (CH_CLR) flag for each MHUv2
+ * channel. One interrupt exists per channel, there is no flag per slot.
+ *
+ * @param[in] dev MHUv2 device instance.
+ */
+static void mhuv2_tx_isr(const struct device *dev)
+{
+	struct mhuv2_send_reg *send = MHUV2_SEND(dev);
+	struct mhuv2_data *data = dev->data;
+
+	for (uint32_t ch = 0; ch < data->num_channels; ch++) {
+		volatile struct mhuv2_send_channel_reg *send_ch = &send->channel[ch];
+
+		if (send_ch->int_stat & MHU2_CH_CLR) {
+			send_ch->int_clr = MHU2_CH_CLR;
+			k_sem_give(data->tx_signalled);
 		}
 	}
 }
@@ -275,17 +312,34 @@ static int mhuv2_send(const struct device *dev, mbox_channel_id_t channel_id,
 	if (IS_ENABLED(CONFIG_MBOX_MHUV2_PROTO_SINGLE_WORD) && msg != NULL) {
 		send->channel[ch].stat_set = *(uint32_t *)msg->data;
 		/* Wait for host to ACK the message by clearing the corresponding STAT reg */
+		if (k_can_yield() && MHU2_SEND_INTERRUPT_ENABLED) {
+			/* Wait for event on this channel */
+			send->int_access_en = MHU2_INT_EN_CHCOMB;
+			send->channel[ch].int_en = MHU2_CH_CLR;
+			if (k_sem_take(data->tx_signalled,
+			    K_USEC(MHU2_STAT_CLEAR_TIMEOUT_US)) != 0) {
+				LOG_ERR("STAT_CLEAR timeout on channel %u", channel_id);
+				ret = -ETIMEDOUT;
+				goto out;
+			}
+		}
 		if (!WAIT_FOR((send->channel[ch].stat) == 0, MHU2_STAT_CLEAR_TIMEOUT_US,
 			      k_busy_wait(1))) {
 			LOG_ERR("STAT_CLEAR timeout on channel %u", channel_id);
 			ret = -ETIMEDOUT;
 			goto out;
 		}
+		/* Clear interrupt enable */
+		send->int_access_en = 0;
+		send->channel[ch].int_en = 0;
 	} else {
 		send->channel[ch].stat_set = stat_mask;
 	}
 
 out:
+	/* Clear interrupt enable */
+	send->int_access_en = 0;
+	send->channel[ch].int_en = 0;
 	send->access_request = 0;
 	atomic_set(&data->send_busy, 0);
 
@@ -455,16 +509,40 @@ static DEVICE_API(mbox, mhuv2_driver_api) = {
 	.set_enabled = mhuv2_set_enabled,
 };
 
+#define MHUV2_IRQ_CONNECT(inst)                                                 \
+	IRQ_CONNECT(DT_INST_IRQN(inst),                                         \
+		    DT_INST_IRQ(inst, priority),                                \
+		    mhuv2_rx_isr,                                               \
+		    DEVICE_DT_INST_GET(inst),                                   \
+		    0);                                                         \
+	irq_enable(DT_INST_IRQN(inst));
+
+/* Connects a the MHUv2 interrupt on the RX side */
+#define MHUV2_RECV_IRQ_CONNECT(inst)                                            \
+	IRQ_CONNECT(DT_INST_IRQN_BY_NAME(inst, recv),                           \
+		    DT_INST_IRQ_BY_NAME(inst, recv, priority),                  \
+		    mhuv2_rx_isr,                                               \
+		    DEVICE_DT_INST_GET(inst),                                   \
+		    0);                                                         \
+	irq_enable(DT_INST_IRQN_BY_NAME(inst, recv));
+
+/* Connects a singular MHUv2 interrupt on the TX side */
+#define MHUV2_SEND_IRQ_CONNECT(inst)                                           \
+	IRQ_CONNECT(DT_INST_IRQN_BY_NAME(inst, send),                           \
+		    DT_INST_IRQ_BY_NAME(inst, send, priority),                  \
+		    mhuv2_tx_isr,                                               \
+		    DEVICE_DT_INST_GET(inst),                                   \
+		    0);                                                         \
+	irq_enable(DT_INST_IRQN_BY_NAME(inst, send));
+
+
 #define MHUV2_INIT(n)								\
 										\
 static void mhuv2_irq_config_##n(const struct device *dev)			\
 {										\
-	IRQ_CONNECT(DT_INST_IRQN(n),						\
-		    DT_INST_IRQ(n, priority),					\
-		    mhuv2_isr,							\
-		    DEVICE_DT_INST_GET(n),					\
-		    0);								\
-	irq_enable(DT_INST_IRQN(n));						\
+	IF_ENABLED(DT_INST_IRQ_HAS_NAME(n, recv), (MHUV2_RECV_IRQ_CONNECT(n))); \
+	IF_ENABLED(DT_INST_IRQ_HAS_NAME(n, send), (MHUV2_SEND_IRQ_CONNECT(n))); \
+	IF_DISABLED(DT_INST_IRQ_HAS_NAME(n, recv), (MHUV2_IRQ_CONNECT(n)));     \
 }										\
 										\
 static const struct mhuv2_config mhuv2_cfg_##n = {				\
@@ -473,7 +551,11 @@ static const struct mhuv2_config mhuv2_cfg_##n = {				\
 	.irq_config = mhuv2_irq_config_##n,					\
 };										\
 										\
-static struct mhuv2_data mhuv2_data_##n;					\
+K_SEM_DEFINE(mhuv2_tx_sem_##n, 0, 1);                                           \
+										\
+static struct mhuv2_data mhuv2_data_##n = {                                     \
+	.tx_signalled = &mhuv2_tx_sem_##n,					\
+};                                                                              \
 										\
 DEVICE_DT_INST_DEFINE(n,							\
 		      &mhuv2_init,						\
