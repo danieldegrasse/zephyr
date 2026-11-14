@@ -1,4 +1,5 @@
 # Copyright (c) 2026, Xsight Labs
+# Copyright (c) 2026, Analog Devices Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 config MBOX_MHUV2
@@ -7,7 +8,7 @@ config MBOX_MHUV2
 	default y
 	help
 	  Driver for Arm MHUv2 (Message Handling Unit v2).
-	  Provides doorbell signalling via the Zephyr mbox API.
+	  Provides doorbell or single-word signalling via the Zephyr mbox API.
 
 if MBOX_MHUV2
 
@@ -21,5 +22,26 @@ config MBOX_MHUV2_NUM_CHANS
 	  MHUv2 allows up to 124 channel windows, each with 32 doorbell slots.
 	  This configuration parameter is needed to avoid dynamic memory
 	  allocation of per-doorbell data structures.
+
+choice MBOX_MHUV2_PROTO
+	prompt "MHUv2 transport protocol"
+	default MBOX_MHUV2_PROTO_DOORBELL
+
+config MBOX_MHUV2_PROTO_DOORBELL
+	bool "Doorbell"
+	help
+	  Use doorbell signaling for MHUv2 transport protocol. This protocol
+	  does not support data transfer, but can signal across up to 124
+	  channels
+
+config MBOX_MHUV2_PROTO_SINGLE_WORD
+	bool "Single-word"
+	help
+	  Use single-word signaling for MHUv2 transport protocol. This protocol
+	  supports data transfer using a single word and can signal across up to 4
+	  channels.
+
+
+endchoice
 
 endif

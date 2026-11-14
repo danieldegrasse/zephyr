@@ -1,15 +1,20 @@
 /*
  * Copyright (c) 2026, Xsight Labs
+ * Copyright (c) 2026, Analog Devices Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
  * ARM MHUv2 (Message Handling Unit v2) mailbox driver.
- * Implements the Zephyr mbox API for doorbell-only signalling.
+ * Implements the Zephyr mbox API for doorbell-only or single-word signalling.
  *
- * Supports all hardware channels from a single instance. Channel IDs
+ * Supports all hardware channels from a single instance.
+ * For doorbell-only signalling, channel IDs
  * are flattened: id = hw_channel * 32 + doorbell_slot.
+ *
+ * For single-word signalling, channel IDs correspond directly to hardware channels.
  */
 
+#include "zephyr/sys/util_macro.h"
 #define DT_DRV_COMPAT arm_mhuv2
 
 #include <zephyr/drivers/mbox.h>
@@ -36,6 +41,8 @@ BUILD_ASSERT(CONFIG_MBOX_MHUV2_NUM_CHANS <= MHU2_CHANNEL_MAX,
 
 /** Timeout in microseconds for the ACCESS_READY handshake. */
 #define MHU2_ACCESS_READY_TIMEOUT_US 1000
+/** Timeout in microseconds for the STAT_CLEAR handshake. */
+#define MHU2_STAT_CLEAR_TIMEOUT_US 10000
 
 /** Receiver INT_EN.CHCOMB: enables the combined channel interrupt (MHUv2.1+). */
 #define MHU2_INT_EN_CHCOMB	BIT(2)
@@ -147,26 +154,52 @@ static void mhuv2_isr(const struct device *dev)
 {
 	struct mhuv2_recv_reg *recv = MHUV2_RECV(dev);
 	struct mhuv2_data *data = dev->data;
+	struct mbox_msg msg;
 
 	for (uint32_t ch = 0; ch < data->num_channels; ch++) {
 		volatile struct mhuv2_recv_channel_reg *recv_ch = &recv->channel[ch];
 		uint32_t stat = recv_ch->stat_pend;
 
-		while (stat != 0) {
-			uint32_t slot = u32_count_trailing_zeros(stat);
-			uint32_t flat_id = ch * MHU2_SLOTS_PER_CHANNEL + slot;
+		if (IS_ENABLED(CONFIG_MBOX_MHUV2_PROTO_DOORBELL)) {
+			while (stat != 0) {
+				uint32_t slot = u32_count_trailing_zeros(stat);
+				uint32_t flat_id = ch * MHU2_SLOTS_PER_CHANNEL + slot;
 
-			if (flat_id < data->num_doorbells &&
-			    data->cb[flat_id] != NULL) {
-				data->cb[flat_id](dev, flat_id,
-						  data->user_data[flat_id],
-						  NULL);
+				if (flat_id < data->num_doorbells &&
+				    data->cb[flat_id] != NULL) {
+					data->cb[flat_id](dev, flat_id,
+							  data->user_data[flat_id],
+							  NULL);
+				}
+
+				recv_ch->stat_clear = BIT(slot);
+				stat &= ~BIT(slot);
+			}
+		} else {
+			if (data->cb[ch] != NULL) {
+				msg.data = &stat;
+				msg.size = sizeof(stat);
+				data->cb[ch](dev, ch, data->user_data[ch], &msg);
 			}
 
-			recv_ch->stat_clear = BIT(slot);
-			stat &= ~BIT(slot);
+			recv_ch->stat_clear = stat;
 		}
 	}
+}
+
+/**
+ * @brief Return the total number of available doorbells.
+ *
+ * @param[in] dev MHUv2 device instance.
+ *
+ * @return Total doorbells (hw_channels * 32).
+ */
+static uint32_t mhuv2_max_channels_get(const struct device *dev)
+{
+	struct mhuv2_data *data = dev->data;
+
+	return IS_ENABLED(CONFIG_MBOX_MHUV2_PROTO_DOORBELL) ?
+		data->num_doorbells : data->num_channels;
 }
 
 /**
@@ -174,14 +207,19 @@ static void mhuv2_isr(const struct device *dev)
  *
  * Performs the ACCESS_REQUEST / ACCESS_READY handshake, verifies the previous
  * doorbell on this slot has been consumed, writes STAT_SET, and releases access.
+ * If @p msg is non-NULL, it is sent as a single-word payload, instead of
+ * using the doorbell protocol.
  *
  * @param[in] dev        MHUv2 device instance.
  * @param[in] channel_id Flattened doorbell ID (hw_channel * 32 + slot).
- * @param[in] msg        Must be NULL (signalling-only, no data payload).
+ *                       For single-word signaling, this corresponds to the
+ *                       hardware channel ID.
+ * @param[in] msg        If provided, sent as the doorbell payload instead of
+ *                       slot index. Only supported for single-word signaling.
  *
- * @retval 0         Doorbell sent successfully.
+ * @retval 0         Message sent successfully.
  * @retval -EINVAL   Invalid channel ID.
- * @retval -EMSGSIZE msg is non-NULL (data transfer not supported).
+ * @retval -EMSGSIZE msg is non-NULL (in doorbell mode)
  * @retval -ETIMEDOUT ACCESS_READY not asserted within the timeout.
  * @retval -EBUSY    Another sender is in flight, or the previous doorbell
  *                   on this slot has not yet been cleared by the remote.
@@ -190,14 +228,27 @@ static int mhuv2_send(const struct device *dev, mbox_channel_id_t channel_id,
 		      const struct mbox_msg *msg)
 {
 	struct mhuv2_data *data = dev->data;
-	uint32_t ch = mhuv2_channel_of(channel_id);
-	uint32_t slot = mhuv2_slot_of(channel_id);
+	uint32_t ch;
+	uint32_t stat_mask;
+	int ret = 0;
 
-	if (channel_id >= data->num_doorbells) {
+	if (channel_id >= mhuv2_max_channels_get(dev)) {
 		return -EINVAL;
 	}
 
-	if (msg != NULL) {
+	if (IS_ENABLED(CONFIG_MBOX_MHUV2_PROTO_DOORBELL)) {
+		ch = mhuv2_channel_of(channel_id);
+		stat_mask = BIT(mhuv2_slot_of(channel_id));
+	} else {
+		ch = channel_id;
+		stat_mask = GENMASK(31, 0);
+	}
+
+	if (IS_ENABLED(CONFIG_MBOX_MHUV2_PROTO_DOORBELL) && msg != NULL) {
+		return -EMSGSIZE;
+	}
+	if (IS_ENABLED(CONFIG_MBOX_MHUV2_PROTO_SINGLE_WORD) && msg != NULL &&
+	    msg->size > sizeof(uint32_t)) {
 		return -EMSGSIZE;
 	}
 
@@ -211,24 +262,34 @@ static int mhuv2_send(const struct device *dev, mbox_channel_id_t channel_id,
 
 	if (!WAIT_FOR(send->access_ready == 1, MHU2_ACCESS_READY_TIMEOUT_US,
 		      k_busy_wait(1))) {
-		send->access_request = 0;
-		atomic_set(&data->send_busy, 0);
-		LOG_ERR("ACCESS_READY timeout on hw channel %u slot %u", ch, slot);
-		return -ETIMEDOUT;
+		LOG_ERR("ACCESS_READY timeout on channel %u", channel_id);
+		ret = -ETIMEDOUT;
+		goto out;
 	}
 
-	if (send->channel[ch].stat & BIT(slot)) {
-		send->access_request = 0;
-		atomic_set(&data->send_busy, 0);
-		return -EBUSY;
+	if (send->channel[ch].stat & stat_mask) {
+		ret = -EBUSY;
+		goto out;
 	}
 
-	send->channel[ch].stat_set = BIT(slot);
+	if (IS_ENABLED(CONFIG_MBOX_MHUV2_PROTO_SINGLE_WORD) && msg != NULL) {
+		send->channel[ch].stat_set = *(uint32_t *)msg->data;
+		/* Wait for host to ACK the message by clearing the corresponding STAT reg */
+		if (!WAIT_FOR((send->channel[ch].stat) == 0, MHU2_STAT_CLEAR_TIMEOUT_US,
+			      k_busy_wait(1))) {
+			LOG_ERR("STAT_CLEAR timeout on channel %u", channel_id);
+			ret = -ETIMEDOUT;
+			goto out;
+		}
+	} else {
+		send->channel[ch].stat_set = stat_mask;
+	}
 
+out:
 	send->access_request = 0;
 	atomic_set(&data->send_busy, 0);
 
-	return 0;
+	return ret;
 }
 
 /**
@@ -248,7 +309,7 @@ static int mhuv2_register_callback(const struct device *dev,
 {
 	struct mhuv2_data *data = dev->data;
 
-	if (channel_id >= data->num_doorbells) {
+	if (channel_id >= mhuv2_max_channels_get(dev)) {
 		return -EINVAL;
 	}
 
@@ -274,25 +335,32 @@ static int mhuv2_register_callback(const struct device *dev,
 static int mhuv2_set_enabled(const struct device *dev,
 			     mbox_channel_id_t channel_id, bool enabled)
 {
-	struct mhuv2_data *data = dev->data;
-	uint32_t ch = mhuv2_channel_of(channel_id);
-	uint32_t slot = mhuv2_slot_of(channel_id);
+	uint32_t ch;
+	uint32_t stat_mask;
 
-	if (channel_id >= data->num_doorbells) {
+	if (IS_ENABLED(CONFIG_MBOX_MHUV2_PROTO_DOORBELL)) {
+		ch = mhuv2_channel_of(channel_id);
+		stat_mask = BIT(mhuv2_slot_of(channel_id));
+	} else {
+		ch = channel_id;
+		stat_mask = GENMASK(31, 0);
+	}
+
+	if (channel_id >= mhuv2_max_channels_get(dev)) {
 		return -EINVAL;
 	}
 
 	volatile struct mhuv2_recv_channel_reg *recv_ch = &MHUV2_RECV(dev)->channel[ch];
-	bool currently_enabled = !(recv_ch->mask & BIT(slot));
+	bool currently_enabled = !(recv_ch->mask & stat_mask);
 
 	if (enabled == currently_enabled) {
 		return -EALREADY;
 	}
 
 	if (enabled) {
-		recv_ch->mask_clear = BIT(slot);
+		recv_ch->mask_clear = stat_mask;
 	} else {
-		recv_ch->mask_set = BIT(slot);
+		recv_ch->mask_set = stat_mask;
 	}
 
 	return 0;
@@ -303,27 +371,13 @@ static int mhuv2_set_enabled(const struct device *dev,
  *
  * @param[in] dev MHUv2 device instance.
  *
- * @return 0, indicating signalling-only mode (no data payload).
+ * @return 4 if in single-word mode, 0 if in doorbell mode.
  */
 static int mhuv2_mtu_get(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	return 0;
-}
-
-/**
- * @brief Return the total number of available doorbells.
- *
- * @param[in] dev MHUv2 device instance.
- *
- * @return Total doorbells (hw_channels * 32).
- */
-static uint32_t mhuv2_max_channels_get(const struct device *dev)
-{
-	struct mhuv2_data *data = dev->data;
-
-	return data->num_doorbells;
+	return IS_ENABLED(CONFIG_MBOX_MHUV2_PROTO_DOORBELL) ? 0 : 4;
 }
 
 /**
@@ -363,7 +417,9 @@ static int mhuv2_init(const struct device *dev)
 	}
 
 	data->num_channels = num_channels;
-	data->num_doorbells = num_channels * MHU2_SLOTS_PER_CHANNEL;
+	if (IS_ENABLED(CONFIG_MBOX_MHUV2_PROTO_DOORBELL)) {
+		data->num_doorbells = num_channels * MHU2_SLOTS_PER_CHANNEL;
+	}
 
 	for (uint32_t ch = 0; ch < num_channels; ch++) {
 		recv->channel[ch].mask_set = 0xFFFFFFFFU;
@@ -382,8 +438,11 @@ static int mhuv2_init(const struct device *dev)
 
 	DEV_CFG(dev)->irq_config(dev);
 
-	LOG_DBG("MHUv2 initialized: %u hw channels, %u doorbells",
-		num_channels, data->num_doorbells);
+	if (IS_ENABLED(CONFIG_MBOX_MHUV2_PROTO_DOORBELL)) {
+		LOG_DBG("Number of doorbells: %u", data->num_doorbells);
+	}
+	LOG_DBG("MHUv2 initialized: %u hw channels",
+		num_channels);
 
 	return 0;
 }
