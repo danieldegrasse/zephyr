@@ -416,4 +416,38 @@
 			status = "disabled";
 		};
 	};
+
+	/* Nodes for SE services. These don't have register addresses */
+	se_services {
+		/* PHY power switches, controlled through the SE run profile */
+		ldo_phy_reg: regulator-ldo-phy {
+			compatible = "alif,ensemble-phy-regulator";
+			phy = "ldo-phy";
+			status = "disabled";
+		};
+
+		usb_phy_reg: regulator-usb-phy {
+			compatible = "alif,ensemble-phy-regulator";
+			phy = "usb-phy";
+			status = "disabled";
+		};
+
+		mipi_tx_dphy_reg: regulator-mipi-tx-dphy {
+			compatible = "alif,ensemble-phy-regulator";
+			phy = "mipi-tx-dphy";
+			status = "disabled";
+		};
+
+		mipi_rx_dphy_reg: regulator-mipi-rx-dphy {
+			compatible = "alif,ensemble-phy-regulator";
+			phy = "mipi-rx-dphy";
+			status = "disabled";
+		};
+
+		mipi_pll_dphy_reg: regulator-mipi-pll-dphy {
+			compatible = "alif,ensemble-phy-regulator";
+			phy = "mipi-pll-dphy";
+			status = "disabled";
+		};
+	};
 };
