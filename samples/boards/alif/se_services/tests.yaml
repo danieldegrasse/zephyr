@@ -1,0 +1,7 @@
+sample:
+  name: Alif Ensemble Series SE services
+tests:
+  sample.boards.alif.se_services:
+    platform_allow:
+      - ensemble_e8_dk/ae822fa0e5597ls0/rtss_hp
+      - ensemble_e8_ak/ae822fa0e5597bs0/rtss_hp
