@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+config REGULATOR_ALIF_PHY
+	bool "Alif Ensemble PHY power regulator driver"
+	default y
+	depends on DT_HAS_ALIF_ENSEMBLE_PHY_REGULATOR_ENABLED
+	select ALIF_SE_SERVICE
+	help
+	  Enable the driver for Alif Ensemble PHY power domains. Each
+	  regulator controls one bit of the phy_pwr_gating field of the
+	  run profile through the Secure Enclave service.
+
+config REGULATOR_ALIF_PHY_INIT_PRIORITY
+	int "Alif Ensemble PHY power regulator init priority"
+	default 46
+	depends on REGULATOR_ALIF_PHY
+	help
+	  Init priority for the Alif Ensemble PHY power regulator driver.
+	  It must be greater than ALIF_SE_SERVICE_INIT_PRIORITY.

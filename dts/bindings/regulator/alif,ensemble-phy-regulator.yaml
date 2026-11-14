@@ -1,0 +1,40 @@
+# Copyright (c) 2026 Analog Devices, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+title: Alif Ensemble PHY power regulator
+
+description: |
+  Power switch for an Alif Ensemble PHY power domain. The regulator is
+  enabled and disabled via the Secture enclave service, by
+  setting and clearing the matching bit of the phy_pwr_gating field in
+  the SOC's run profile.
+
+compatible: "alif,ensemble-phy-regulator"
+
+include:
+  - name: base.yaml
+  - name: regulator.yaml
+    property-allowlist:
+      - regulator-name
+      - regulator-boot-on
+      - regulator-boot-off
+
+properties:
+  phy:
+    type: string
+    required: true
+    enum:
+      - "ldo-phy"
+      - "usb-phy"
+      - "mipi-tx-dphy"
+      - "mipi-rx-dphy"
+      - "mipi-pll-dphy"
+    description: |
+      PHY power domain controlled by this regulator
+
+examples:
+  - |
+    regulator-usb-phy {
+      compatible = "alif,ensemble-phy-regulator";
+      phy = "usb-phy";
+    };
