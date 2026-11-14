@@ -38,6 +38,20 @@
 		reg = <0x20000000 DT_SIZE_K(1024)>;
 		zephyr,memory-region = "DTCM";
 	};
+
+	/*
+	 * Copies of ITCM and DTCM accessible from other cores, as well
+	 * as from bus masters like DMA and JPEG.
+	 */
+	itcm_backdoor: itcm@50000000 {
+		compatible = "mimo-sram";
+		reg = <0x50000000 DT_SIZE_K(256)>;
+	};
+
+	dtcm_backdoor: dtcm@50800000 {
+		compatible = "mimo-sram";
+		reg = <0x50800000 DT_SIZE_K(1024)>;
+	};
 };
 
 &nvic {
