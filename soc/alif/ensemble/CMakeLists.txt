@@ -3,6 +3,7 @@
 
 zephyr_include_directories(.)
 zephyr_include_directories(../common)
+zephyr_include_directories(include)
 
 # Controller-mode setup for the DesignWare SSI instances
 zephyr_sources_ifdef(CONFIG_SPI_DW ssi.c)
