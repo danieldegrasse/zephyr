@@ -18,4 +18,8 @@ if(CONFIG_SOC_FAMILY_ENSEMBLE_APSS)
   add_subdirectory(apss)
 endif()
 
+if(CONFIG_ALIF_SE_SERVICE)
+  add_subdirectory(se_service)
+endif()
+
 add_subdirectory(${CONFIG_SOC_SERIES})

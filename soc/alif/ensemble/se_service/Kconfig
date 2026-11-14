@@ -1,0 +1,31 @@
+# Copyright (c) 2026 Analog Devices, Inc
+# SPDX-License-Identifier: Apache-2.0
+
+config ALIF_SE_SERVICE
+	bool "ALIF Secure Enclave Service"
+	default y
+	select MBOX
+	help
+	  Enable the ALIF Secure Enclave Service, which manages SE power
+	  profiles, and provides runtime APIs to interface with the SE.
+
+if ALIF_SE_SERVICE
+
+config ALIF_SE_SERVICE_INIT_PRIORITY
+	int "SE service power profiles init priority"
+	default 45
+	help
+	  SE service power profiles initialization priority. Runs in
+	  PRE_KERNEL_1 context.
+
+
+# SE uses single-word MHUv2 protocol
+choice MBOX_MHUV2_PROTO
+	default MBOX_MHUV2_PROTO_SINGLE_WORD
+endchoice
+
+module = ALIF_SE
+module-str = "alif secure enclave service"
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # ALIF_SE_SERVICE

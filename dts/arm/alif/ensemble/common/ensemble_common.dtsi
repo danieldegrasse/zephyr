@@ -18,6 +18,12 @@
  */
 
 / {
+	chosen {
+		alif,secure-cpu-mhu = &secpu_mhu0;
+	};
+};
+
+/ {
 	clocks {
 		syst_aclk: axi-clk {
 			compatible = "fixed-clock";
